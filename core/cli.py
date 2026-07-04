@@ -476,5 +476,29 @@ def open(path: str, editor: str = "", line: int = 0,
     _asyncio.run(_run())
 
 
+@app.command()
+def supervise_run(command: str, goal: str = "run a coding task") -> None:
+    """Run a coding agent/command under Jardo's prompt supervision: it auto-answers
+    'proceed? (y/n)' prompts per policy, declining anything not approved (§4.3, §7.2)."""
+    import asyncio as _asyncio
+
+    from core.coding_env.supervised_agent import SupervisedAgent
+    from core.db import SessionFactory
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            result = await SupervisedAgent(session).run(command, goal)
+        if not result["decisions"]:
+            console.print("[dim]No permission prompts appeared.[/dim]")
+        for d in result["decisions"]:
+            color = "green" if d["answered"] in ("y", "yes") else "red"
+            console.print(f"[{color}]answered '{d['answered']}'[/{color}] to: "
+                          f"{d['prompt']}  [dim]({d['verdict']})[/dim]")
+        if result["transcript_tail"].strip():
+            console.print(f"[dim]{result['transcript_tail'][-400:]}[/dim]")
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     app()
