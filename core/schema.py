@@ -136,6 +136,35 @@ class AuditLog(Base):
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class Task(Base):
+    """Orchestrator work item (spec §4.2): one-at-a-time durable executor.
+
+    Lifecycle: pending → verifying → executing → (done | failed);
+    a failed attempt with retries left returns to pending with next_run_at set.
+    checkpoint holds resumable state so a crash mid-run doesn't lose progress.
+    """
+
+    __tablename__ = "tasks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(24))       # chat | action | goal
+    goal: Mapped[str] = mapped_column(Text)
+    spec: Mapped[dict] = mapped_column(JSON, default=dict)      # the request payload
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    plan: Mapped[dict] = mapped_column(JSON, default=dict)
+    checkpoint: Mapped[dict] = mapped_column(JSON, default=dict)
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, onupdate=_now
+    )
+
+
 class Report(Base):
     """Generated reports (spec §4.4): stored and searchable, in-app inbox."""
 
