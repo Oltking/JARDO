@@ -51,7 +51,7 @@ class WakeWordDetector:
 
 
 # openWakeWord 0.4.0 does not score under onnxruntime 1.27 in this env (see
-# [[jarvis-wakeword-todo]]). WhisperWakeDetector is the reliable default: it
+# [[jardo-wakeword-todo]]). WhisperWakeDetector is the reliable default: it
 # reuses the proven STT path — capture short windows, skip silence, transcribe,
 # and trigger when the wake word appears. Heavier on CPU than a dedicated wake
 # model, fine for a single-user MVP.
