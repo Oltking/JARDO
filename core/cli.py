@@ -424,5 +424,57 @@ def voice() -> None:
         console.print("\nvoice loop stopped.")
 
 
+@app.command()
+def tools() -> None:
+    """List detected coding environments Jardo can operate (editors, terminals,
+    shells, agents) — coding scope only."""
+    from core.coding_env.detect import detect
+
+    inv = detect()
+    console.print("[bold]Editors[/bold]: " + (", ".join(
+        f"{k} ({how})" for k, how in inv.editors.items()) or "none"))
+    console.print("[bold]Terminals[/bold]: " + (", ".join(inv.terminals) or "none"))
+    console.print("[bold]Shells[/bold]: " + (", ".join(inv.shells) or "none"))
+    console.print("[bold]Coding agents[/bold]: " + (", ".join(
+        f"{v}" for v in inv.agents.values()) or "none"))
+    console.print("[bold]CLIs[/bold]: " + (", ".join(inv.clis) or "none"))
+
+
+@app.command()
+def open(path: str, editor: str = "", line: int = 0,
+         goal: str = "open a file in my editor") -> None:
+    """Open a path in a coding editor (Sentinel-gated). Defaults to the first
+    detected editor. Refuses non-coding apps."""
+    import asyncio as _asyncio
+
+    from core.coding_env.detect import detect
+    from core.coding_env.operator import CodingOperator, NotACodingEnvironment, OperationDenied
+    from core.db import SessionFactory
+
+    async def _run() -> None:
+        editor_key = editor or next(iter(detect().editors), "")
+        if not editor_key:
+            console.print("[red]No coding editor detected. Install VS Code, Cursor, …[/red]")
+            raise typer.Exit(1)
+        async with SessionFactory() as session:
+            op = CodingOperator(session)
+            try:
+                result = await op.open_in_editor(
+                    editor_key, path, goal, line=line or None)
+                await session.commit()
+            except NotACodingEnvironment as exc:
+                console.print(f"[red]{exc}[/red]"); raise typer.Exit(1)
+            except OperationDenied as exc:
+                console.print(f"[yellow]Held for approval: {exc}[/yellow]")
+                console.print("Approve with [bold]jardo approvals[/bold], set a policy, "
+                              "and retry.")
+                await session.commit()
+                return
+        console.print(f"[green]Opened {path} in {editor_key}[/green] "
+                      f"[dim]({' '.join(result['argv'])})[/dim]")
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     app()
