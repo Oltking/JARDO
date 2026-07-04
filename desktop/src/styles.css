@@ -1,0 +1,361 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #121821;
+  --panel-2: #182230;
+  --border: #223042;
+  --text: #e6edf3;
+  --muted: #8aa0b3;
+  --accent: #35c2ff;
+  --accent-dim: #1d6f92;
+  --good: #3ddc84;
+  --bad: #ff5f56;
+  --warn: #ffb454;
+  font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Roboto,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Status bar */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo {
+  color: var(--accent);
+  font-size: 18px;
+}
+.title {
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.conn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 6px currentColor;
+  color: var(--warn);
+}
+.dot.online {
+  background: var(--good);
+  color: var(--good);
+}
+.dot.offline {
+  background: var(--bad);
+  color: var(--bad);
+}
+.kill-btn {
+  background: #2a1215;
+  color: var(--bad);
+  border: 1px solid #5a2026;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.kill-btn:hover {
+  background: #3a171b;
+}
+.kill-btn.active {
+  background: var(--bad);
+  color: #fff;
+}
+.hotkey {
+  opacity: 0.7;
+  font-size: 11px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.kill-banner {
+  background: var(--bad);
+  color: #fff;
+  font-weight: 600;
+  padding: 8px 14px;
+  text-align: center;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Banners */
+.banner {
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin: 10px;
+  font-size: 13px;
+}
+.banner.warn {
+  background: #2a2110;
+  border: 1px solid #5a4620;
+  color: var(--warn);
+}
+.banner.error {
+  background: #2a1215;
+  border: 1px solid #5a2026;
+  color: var(--bad);
+}
+.banner code,
+.usage code,
+.empty code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* Chat */
+.chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.empty {
+  color: var(--muted);
+  font-size: 13px;
+  margin: auto;
+  text-align: center;
+  max-width: 420px;
+}
+.msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 80%;
+}
+.msg.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.msg.assistant {
+  align-self: flex-start;
+}
+.bubble {
+  padding: 10px 12px;
+  border-radius: 12px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 14px;
+}
+.msg.user .bubble {
+  background: var(--accent-dim);
+  color: #eaf7ff;
+}
+.msg.assistant .bubble {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.bubble.typing {
+  color: var(--muted);
+}
+.usage {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.composer textarea {
+  flex: 1;
+  resize: none;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 14px;
+}
+.composer button,
+.approval-actions button,
+.ghost {
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  font-size: 13px;
+  background: var(--accent-dim);
+  color: #eaf7ff;
+}
+.composer button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Approvals */
+.approvals {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+.approvals-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.approvals-head h2 {
+  font-size: 15px;
+  margin: 6px 4px;
+}
+.ghost {
+  background: transparent;
+  color: var(--muted);
+}
+.approval-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.approval-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.approval-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.action-type {
+  font-weight: 600;
+  color: var(--text);
+}
+.created {
+  margin-left: auto;
+}
+.sev {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.sev.low {
+  background: #14361f;
+  color: var(--good);
+}
+.sev.medium {
+  background: #33290f;
+  color: var(--warn);
+}
+.sev.high {
+  background: #3a1a10;
+  color: #ff8a4c;
+}
+.sev.critical {
+  background: var(--bad);
+  color: #fff;
+}
+.approval-body {
+  margin: 10px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.approval-body strong {
+  color: var(--muted);
+  font-weight: 600;
+}
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
+.approval-actions .approve {
+  background: #14361f;
+  color: var(--good);
+  border-color: #1f6b3a;
+}
+.approval-actions .deny {
+  background: #2a1215;
+  color: var(--bad);
+  border-color: #5a2026;
+}
+.approval-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
