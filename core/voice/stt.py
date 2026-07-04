@@ -13,9 +13,13 @@ DEFAULT_MODEL = "base"
 
 
 class SpeechToText:
-    def __init__(self, model_size: str = DEFAULT_MODEL, compute_type: str = "int8"):
+    def __init__(self, model_size: str = DEFAULT_MODEL, compute_type: str = "int8",
+                 language: str = "en"):
         self._model_size = model_size
         self._compute_type = compute_type
+        # Pin the language: whisper's auto-detect hallucinates on quiet/short
+        # clips (observed: silence transcribed as Russian). Set None to auto-detect.
+        self._language = language
         self._model = None
 
     def _ensure_model(self):
@@ -31,5 +35,8 @@ class SpeechToText:
         model = self._ensure_model()
         if hasattr(audio, "dtype") and audio.dtype == np.int16:
             audio = audio.astype(np.float32) / 32768.0  # whisper wants float32 in [-1,1]
-        segments, _info = model.transcribe(audio, beam_size=5)
+        segments, _info = model.transcribe(
+            audio, beam_size=5, language=self._language,
+            condition_on_previous_text=False,  # further reduces hallucination
+        )
         return " ".join(segment.text.strip() for segment in segments).strip()
