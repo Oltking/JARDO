@@ -80,6 +80,33 @@ class Message(Base):
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
 
 
+class Policy(Base):
+    """Permission Broker tiers (spec §6.5): owner-defined action policies."""
+
+    __tablename__ = "policies"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    action_type: Mapped[str] = mapped_column(String(64), index=True)
+    target_pattern: Mapped[str] = mapped_column(String(500))  # regex, fullmatch
+    tier: Mapped[str] = mapped_column(String(16))  # always-allow | ask-once | always-ask
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class Approval(Base):
+    """Escalated actions awaiting the owner (spec §6.5); UI arrives Phase 5."""
+
+    __tablename__ = "approvals"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    actor: Mapped[str] = mapped_column(String(64))
+    action_type: Mapped[str] = mapped_column(String(64))
+    target: Mapped[str] = mapped_column(Text)
+    stated_goal: Mapped[str] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class RoutingLog(Base):
     """Every routing decision (spec §5.3): task_id, route, est/alt cost, saved_$."""
 
