@@ -99,3 +99,36 @@ async def test_supervised_agent_approves_policied_prompt(session):
     d = result["decisions"][0]
     assert d["answered"] == "y"
     assert "ANSWER=y" in result["transcript_tail"]
+
+
+# ---- numbered menu (Claude Code style) -----------------------------------
+
+def test_detects_claude_code_numbered_menu():
+    buf = (
+        "Bash command\n"
+        "  git push --force origin main\n"
+        "\n"
+        "Do you want to proceed?\n"
+        "❯ 1. Yes\n"
+        "  2. Yes, and don't ask again for git commands\n"
+        "  3. No, and tell Claude what to do differently (esc)\n"
+    )
+    m = detect_prompt(buf)
+    assert m is not None
+    assert m.yes_token == "1"
+    assert m.no_token == "3"
+    assert "git push --force" in m.proposed_action
+
+
+def test_numbered_menu_without_signal_ignored():
+    # a numbered list that isn't a permission prompt
+    buf = "Results:\n1. yesterday\n2. nowhere\n"
+    assert detect_prompt(buf) is None
+
+
+def test_numbered_menu_decision():
+    buf = ("Do you want to proceed?\n1. Yes\n2. No\n")
+    m = detect_prompt(buf)
+    from core.sentinel.models import Verdict
+    assert decide_answer(m, Verdict.APPROVE) == "1"
+    assert decide_answer(m, Verdict.DENY) == "2"

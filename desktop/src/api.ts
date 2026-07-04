@@ -133,6 +133,31 @@ export async function voiceSay(text: string): Promise<void> {
   }
 }
 
+// ---- Coding environments + agent decisions (Agents tab) -------------------
+
+export interface CodingInventory {
+  editors: Record<string, string>;
+  terminals: string[];
+  shells: Record<string, string>;
+  agents: Record<string, string>;
+  clis: Record<string, string>;
+}
+
+export interface AgentDecision {
+  ts: string;
+  actor: string;
+  event: string; // "prompt.answered" | "action.review"
+  detail: Record<string, unknown>;
+}
+
+export async function codingTools(): Promise<CodingInventory> {
+  return invoke<CodingInventory>("coding_tools");
+}
+
+export async function codingDecisions(): Promise<AgentDecision[]> {
+  return invoke<AgentDecision[]>("coding_decisions");
+}
+
 // Fires the kill-switch stub in Rust (logs + emits `kill-switch`). Real
 // synthetic-input halting lands in Phase 7 (spec §7.3).
 export async function killSwitch(source: string): Promise<void> {

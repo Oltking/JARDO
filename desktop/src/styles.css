@@ -458,3 +458,38 @@ body {
 .voice-line.jardo .who {
   color: var(--accent);
 }
+
+/* ---- Agents panel (coding-agent supervision) ---- */
+.agents { padding: 12px 4px; }
+.tools-grid {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+.tool-row { display: flex; gap: 10px; padding: 4px 0; font-size: 13px; }
+.tool-label {
+  min-width: 108px; color: var(--muted); font-weight: 600;
+}
+.tool-items { color: var(--fg); }
+.tool-items .dim, .decision .dim { color: var(--muted); }
+.section { font-size: 13px; color: var(--muted); margin: 6px 2px; font-weight: 600; }
+.decisions { display: flex; flex-direction: column; gap: 6px; }
+.decision {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px;
+}
+.decision .badge {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 4px; min-width: 62px; text-align: center;
+}
+.badge.yes { background: #14361f; color: var(--good); }
+.badge.no { background: #2a1215; color: var(--bad); }
+.badge.review { background: var(--panel-2); color: var(--muted); }
+.decision-subject {
+  flex: 1; font-family: ui-monospace, monospace; font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.decision-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }

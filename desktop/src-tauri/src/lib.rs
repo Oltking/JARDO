@@ -212,6 +212,29 @@ async fn decide_approval(id: String, approve: bool) -> Result<DecideResult, ApiE
     parse_json(resp).await
 }
 
+/// Detected coding environments (editors/terminals/shells/agents) for the
+/// Agents tab. Flexible JSON — the shape is a nested inventory.
+#[tauri::command]
+async fn coding_tools() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/coding/tools", core_base()))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Recent agent-prompt decisions + action reviews (audit log) for the Agents tab.
+#[tauri::command]
+async fn coding_decisions() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/coding/decisions", core_base()))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
 /// Voice status (spec §8): deps available, mic devices, selected device, TTS
 /// backend. Returned as a flexible JSON value since the device list is nested.
 #[tauri::command]
@@ -352,6 +375,8 @@ pub fn run() {
             voice_status,
             voice_transcribe,
             voice_say,
+            coding_tools,
+            coding_decisions,
             kill_switch
         ])
         .run(tauri::generate_context!())

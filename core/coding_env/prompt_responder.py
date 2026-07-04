@@ -59,30 +59,55 @@ def _extract_action(lines: list[str]) -> str:
     return lines[-1] if lines else ""
 
 
-def detect_prompt(buffer: str) -> PromptMatch | None:
-    """Return a PromptMatch if the tail of `buffer` is an interactive
-    permission prompt awaiting a yes/no answer, else None."""
-    lines = _last_nonempty_lines(buffer)
-    if not lines:
-        return None
+# Numbered-menu options, e.g. Claude Code's "❯ 1. Yes", "3. No, and tell…".
+_MENU_OPTION = re.compile(r"^[❯>*\s]*(\d+)[.)]\s*(.+)$")
+
+
+def _detect_yn_inline(lines: list[str]) -> PromptMatch | None:
     tail = lines[-1]
-    # The waiting prompt / answer hint is on the last line or two.
     hint_space = " ".join(lines[-2:])
     hint = next(((y, n) for pat, y, n in _ANSWER_HINTS if pat.search(hint_space)), None)
     if hint is None:
         return None
-    # The consent "signal" (e.g. "Run shell command?") can sit a few lines above
-    # the command and the prompt — search a wider window. Terse tools that only
-    # print "[y/N]" at a line end also qualify.
     signal_space = " ".join(lines[-4:])
     if not _SIGNAL.search(signal_space) and not re.search(
         r"[\(\[][yY]/[nN][\)\]]\s*[:?]?\s*$", tail
     ):
         return None
-    return PromptMatch(
-        yes_token=hint[0], no_token=hint[1],
-        prompt_line=tail, proposed_action=_extract_action(lines),
-    )
+    return PromptMatch(hint[0], hint[1], tail, _extract_action(lines))
+
+
+def _detect_numbered_menu(lines: list[str]) -> PromptMatch | None:
+    """Claude-Code-style numbered permission menu (1. Yes / 2. … / 3. No)."""
+    yes_num = no_num = None
+    option_lines = []
+    for ln in lines:
+        m = _MENU_OPTION.match(ln)
+        if not m:
+            continue
+        num, text = m.group(1), m.group(2).strip().lower()
+        option_lines.append(ln)
+        if yes_num is None and text.startswith("yes"):
+            yes_num = num
+        if no_num is None and text.startswith("no"):
+            no_num = num
+    if yes_num is None or no_num is None:
+        return None
+    # A real menu has a consent signal nearby (e.g. "Do you want to proceed?").
+    if not _SIGNAL.search(" ".join(lines)):
+        return None
+    context = [ln for ln in lines if ln not in option_lines]
+    action = _extract_action(context) if context else ""
+    return PromptMatch(yes_num, no_num, option_lines[-1], action)
+
+
+def detect_prompt(buffer: str) -> PromptMatch | None:
+    """Return a PromptMatch if the tail of `buffer` is an interactive permission
+    prompt awaiting an answer (inline y/n or a numbered yes/no menu), else None."""
+    lines = _last_nonempty_lines(buffer, n=8)
+    if not lines:
+        return None
+    return _detect_yn_inline(lines) or _detect_numbered_menu(lines)
 
 
 def decide_answer(match: PromptMatch, verdict: Verdict) -> str | None:

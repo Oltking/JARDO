@@ -222,6 +222,34 @@ async def voice_say(request: SayRequest) -> dict:
     return {"spoken": True}
 
 
+# ---- Coding-environment surface (owner scope) — for the desktop Agents tab.
+
+@app.get("/coding/tools")
+async def coding_tools() -> dict:
+    """Detected coding environments Jardo can operate (editors/terminals/…)."""
+    from core.coding_env.detect import detect
+    return detect().as_dict()
+
+
+@app.get("/coding/decisions")
+async def coding_decisions(session: AsyncSession = Depends(get_session),
+                           limit: int = 25) -> list[dict]:
+    """Recent agent-prompt decisions and action reviews (from the audit log)."""
+    from sqlalchemy import select
+    from core.schema import AuditLog
+
+    rows = (await session.execute(
+        select(AuditLog).where(
+            AuditLog.event_type.in_(("prompt.answered", "action.review"))
+        ).order_by(AuditLog.ts.desc()).limit(limit)
+    )).scalars().all()
+    return [
+        {"ts": r.ts.isoformat(), "actor": r.actor, "event": r.event_type,
+         "detail": r.detail}
+        for r in rows
+    ]
+
+
 class SuperviseRequest(BaseModel):
     actor: str = "claude-code"
     tool_name: str
