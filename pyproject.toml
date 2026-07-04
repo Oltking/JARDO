@@ -33,6 +33,14 @@ dev = [
 jarvis = "core.cli:app"
 jarvis-mcp = "core.mcp_server.server:main"
 
+[project.optional-dependencies]
+voice = [
+    "faster-whisper",
+    "numpy",
+    "openwakeword",
+    "sounddevice",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -327,5 +327,100 @@ def approvals(decide: str = "", approve: bool = True) -> None:
     asyncio.run(_run())
 
 
+@app.command()
+def say(text: str) -> None:
+    """Speak text in JARVIS's voice (spec §8). Quick TTS check."""
+    from core.voice.tts import get_tts
+    get_tts(settings.voice_tts_backend if hasattr(settings, "voice_tts_backend") else "say").speak(text)
+
+
+@app.command()
+def voice_setup() -> None:
+    """First-run voice permission walkthrough (spec §8): each permission, in
+    order, with a plain-language reason, granted individually."""
+    console.print("[bold]JARVIS voice & permissions setup[/bold]\n")
+    steps = [
+        ("Microphone", "so I can hear your wake word and commands. Audio is "
+         "transcribed locally — nothing is sent to the cloud.", True),
+        ("Notifications", "so I can surface reports and urgent security events.", False),
+        ("Screen recording", "only if you later enable screen awareness (§7). "
+         "Off by default; skip for now if unsure.", False),
+        ("File access", "so I can read project files you point me at. Scoped, "
+         "and every access is logged.", False),
+        ("Agent control", "so I can supervise other agents (Claude Code, etc.) "
+         "and answer their permission prompts per your policy.", False),
+        ("Spend caps", "so I never exceed your daily budget. Default $2/day.", False),
+    ]
+    for name, why, is_mic in steps:
+        console.print(f"[bold]{name}[/bold]: {why}")
+        if not typer.confirm(f"  Set up {name} now?", default=is_mic):
+            console.print("  [dim]skipped[/dim]\n")
+            continue
+        if is_mic:
+            from core.voice.mic import request_mic_permission
+            console.print("  [yellow]macOS will now ask to allow microphone access — "
+                          "click Allow.[/yellow]")
+            ok = request_mic_permission()
+            console.print("  [green]microphone ready[/green]\n" if ok
+                          else "  [red]microphone not granted (enable in System "
+                          "Settings → Privacy → Microphone)[/red]\n")
+        else:
+            console.print("  [green]noted[/green]\n")
+    console.print("Optional: record a short voice sample to strengthen the presence "
+                  "ritual (speaker verification, §2.5b) — run [bold]jarvis voice-sample[/bold] later.")
+    console.print("\nDone. Try [bold]jarvis listen[/bold] (tap-to-talk) or "
+                  "[bold]jarvis voice[/bold] (wake word).")
+
+
+@app.command()
+def listen() -> None:
+    """Tap-to-talk: record one utterance, transcribe, respond, and speak (§8)."""
+    from core.voice.loop import VoiceLoop, VoiceConfig
+    from core.voice.mic import record_seconds
+    from core.voice.stt import SpeechToText
+    from core.voice.tts import get_tts
+
+    def chat_fn(text: str) -> str:
+        console.print(f"[cyan]you said:[/cyan] {text}")
+        resp = httpx.post(f"{_BASE}/chat", json={"message": text},
+                          timeout=settings.request_timeout_seconds + 10)
+        if resp.status_code != 200:
+            return resp.json().get("detail", "I could not reach the core.")
+        return resp.json()["reply"]
+
+    console.print("[bold]Listening for ~5 seconds — speak now…[/bold]")
+    loop = VoiceLoop(detector=None, stt=SpeechToText(), tts=get_tts("say"),
+                     chat_fn=chat_fn, record_fn=record_seconds,
+                     frame_source=lambda: iter(()), config=VoiceConfig())
+    reply = loop.listen_once()
+    console.print(f"[magenta]jarvis:[/magenta] {reply}" if reply
+                  else "[dim](heard nothing)[/dim]")
+
+
+@app.command()
+def voice() -> None:
+    """Run the wake-word voice loop: say 'hey JARVIS' to talk (§8)."""
+    from core.voice.loop import VoiceLoop, VoiceConfig
+    from core.voice.mic import record_seconds, frame_stream
+    from core.voice.stt import SpeechToText
+    from core.voice.tts import get_tts
+    from core.voice.wakeword import WakeWordDetector
+
+    def chat_fn(text: str) -> str:
+        resp = httpx.post(f"{_BASE}/chat", json={"message": text},
+                          timeout=settings.request_timeout_seconds + 10)
+        return resp.json().get("reply", "…") if resp.status_code == 200 else \
+            resp.json().get("detail", "core unreachable")
+
+    console.print("[bold]Voice loop starting. Say 'hey JARVIS'. Ctrl-C to stop.[/bold]")
+    loop = VoiceLoop(detector=WakeWordDetector(), stt=SpeechToText(), tts=get_tts("say"),
+                     chat_fn=chat_fn, record_fn=record_seconds,
+                     frame_source=frame_stream, config=VoiceConfig())
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        console.print("\nvoice loop stopped.")
+
+
 if __name__ == "__main__":
     app()

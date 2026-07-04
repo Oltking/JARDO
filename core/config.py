@@ -33,5 +33,10 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
+    # Voice (spec §8) — fully optional.
+    voice_enabled: bool = False
+    voice_tts_backend: str = "say"  # "say" (macOS, default) | "piper"
+    voice_tts_voice: str = "Samantha"
+
 
 settings = Settings()
