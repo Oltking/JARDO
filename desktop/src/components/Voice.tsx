@@ -14,6 +14,7 @@ import {
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 
 const LOW_SIGNAL = 0.02; // below this, capture is effectively silence
+const CLIPPING = 0.98; // at/above this the mic is clipping — lower input volume
 
 export function Voice() {
   const [status, setStatus] = useState<VoiceStatus | null>(null);
@@ -126,7 +127,9 @@ export function Voice() {
           <span className="amp-label">
             signal {amplitude.toFixed(3)}
             {amplitude < LOW_SIGNAL &&
-              " — very quiet; speak closer or disconnect Bluetooth audio"}
+              " — very quiet; raise input volume or disconnect Bluetooth audio"}
+            {amplitude >= CLIPPING &&
+              " — clipping; lower mic input volume in System Settings"}
           </span>
         </div>
       )}
