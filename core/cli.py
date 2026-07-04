@@ -389,9 +389,8 @@ def listen() -> None:
         return resp.json()["reply"]
 
     console.print("[bold]Listening for ~5 seconds — speak now…[/bold]")
-    loop = VoiceLoop(detector=None, stt=SpeechToText(), tts=get_tts("say"),
-                     chat_fn=chat_fn, record_fn=record_seconds,
-                     frame_source=lambda: iter(()), config=VoiceConfig())
+    loop = VoiceLoop(wake_detector=None, stt=SpeechToText(), tts=get_tts("say"),
+                     chat_fn=chat_fn, record_fn=record_seconds, config=VoiceConfig())
     reply = loop.listen_once()
     console.print(f"[magenta]jarvis:[/magenta] {reply}" if reply
                   else "[dim](heard nothing)[/dim]")
@@ -401,10 +400,10 @@ def listen() -> None:
 def voice() -> None:
     """Run the wake-word voice loop: say 'hey JARVIS' to talk (§8)."""
     from core.voice.loop import VoiceLoop, VoiceConfig
-    from core.voice.mic import record_seconds, frame_stream
+    from core.voice.mic import record_seconds
     from core.voice.stt import SpeechToText
     from core.voice.tts import get_tts
-    from core.voice.wakeword import WakeWordDetector
+    from core.voice.wakeword import WhisperWakeDetector
 
     def chat_fn(text: str) -> str:
         resp = httpx.post(f"{_BASE}/chat", json={"message": text},
@@ -412,10 +411,13 @@ def voice() -> None:
         return resp.json().get("reply", "…") if resp.status_code == 200 else \
             resp.json().get("detail", "core unreachable")
 
+    stt = SpeechToText()
+    stt._ensure_model()
     console.print("[bold]Voice loop starting. Say 'hey JARVIS'. Ctrl-C to stop.[/bold]")
-    loop = VoiceLoop(detector=WakeWordDetector(), stt=SpeechToText(), tts=get_tts("say"),
-                     chat_fn=chat_fn, record_fn=record_seconds,
-                     frame_source=frame_stream, config=VoiceConfig())
+    # STT-based wake detection (openWakeWord is non-functional here; see
+    # jarvis-wakeword-todo). Reuses the proven transcription path.
+    loop = VoiceLoop(wake_detector=WhisperWakeDetector(stt), stt=stt, tts=get_tts("say"),
+                     chat_fn=chat_fn, record_fn=record_seconds, config=VoiceConfig())
     try:
         loop.run()
     except KeyboardInterrupt:

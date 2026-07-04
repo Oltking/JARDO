@@ -22,15 +22,15 @@ class VoiceConfig:
 
 
 class VoiceLoop:
-    def __init__(self, detector, stt, tts, chat_fn: Callable[[str], str],
-                 record_fn: Callable[[float], object], frame_source: Callable[[], object],
+    def __init__(self, wake_detector, stt, tts, chat_fn: Callable[[str], str],
+                 record_fn: Callable[[float], object],
                  config: VoiceConfig | None = None):
-        self._detector = detector
+        # wake_detector: object with .listen(timeout) -> bool (WhisperWakeDetector).
+        self._wake = wake_detector
         self._stt = stt
         self._tts = tts
         self._chat_fn = chat_fn            # (text) -> reply text (calls core /chat)
         self._record_fn = record_fn        # (seconds) -> audio array
-        self._frame_source = frame_source  # () -> iterable of frames
         self._config = config or VoiceConfig()
 
     def listen_once(self) -> str:
@@ -47,8 +47,8 @@ class VoiceLoop:
         """Blocking wake-word loop. max_wakes bounds it for testing/demo."""
         self._tts.speak("Voice loop ready. Say, hey JARVIS, to begin.")
         wakes = 0
-        for frame in self._frame_source():
-            if self._detector.detected(frame):
+        while True:
+            if self._wake.listen(timeout_seconds=3600):
                 logger.info("wake word detected")
                 self._tts.speak("Yes?")
                 self.listen_once()

@@ -47,3 +47,42 @@ class WakeWordDetector:
 
     def detected(self, frame) -> bool:
         return self.score(frame) >= self._threshold
+
+
+# openWakeWord 0.4.0 does not score under onnxruntime 1.27 in this env (see
+# [[jarvis-wakeword-todo]]). WhisperWakeDetector is the reliable default: it
+# reuses the proven STT path — capture short windows, skip silence, transcribe,
+# and trigger when the wake word appears. Heavier on CPU than a dedicated wake
+# model, fine for a single-user MVP.
+_WAKE_PHRASES = ("jarvis", "hey jarvis", "javis", "hey javis")  # whisper variants
+_SILENCE_GATE = 0.02  # skip transcribing windows quieter than this
+
+
+class WhisperWakeDetector:
+    def __init__(self, stt, phrases: tuple[str, ...] = _WAKE_PHRASES,
+                 window_seconds: float = 2.0, silence_gate: float = _SILENCE_GATE):
+        self._stt = stt
+        self._phrases = tuple(p.lower() for p in phrases)
+        self._window = window_seconds
+        self._silence_gate = silence_gate
+
+    def _matches(self, transcript: str) -> bool:
+        t = transcript.lower()
+        return any(p in t for p in self._phrases)
+
+    def listen(self, timeout_seconds: float = 30.0) -> bool:
+        """Block until the wake word is heard or timeout. Returns True on wake."""
+        import time
+
+        import numpy as np
+        from core.voice import mic
+
+        start = time.time()
+        while time.time() - start < timeout_seconds:
+            audio = mic.record_seconds(self._window)
+            amp = float(np.abs(audio.astype(np.float32) / 32768.0).max())
+            if amp < self._silence_gate:
+                continue  # silence — don't waste a transcription
+            if self._matches(self._stt.transcribe(audio)):
+                return True
+        return False

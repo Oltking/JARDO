@@ -23,10 +23,9 @@ class _FakeTTS:
 def test_listen_once_transcribes_and_responds():
     tts = _FakeTTS()
     loop = VoiceLoop(
-        detector=None, stt=_FakeSTT("what is the weather"), tts=tts,
+        wake_detector=None, stt=_FakeSTT("what is the weather"), tts=tts,
         chat_fn=lambda text: f"reply to: {text}",
         record_fn=lambda seconds: b"fake-audio",
-        frame_source=lambda: iter(()),
         config=VoiceConfig(),
     )
     reply = loop.listen_once()
@@ -43,11 +42,28 @@ def test_listen_once_ignores_empty_transcription():
         return "x"
 
     loop = VoiceLoop(
-        detector=None, stt=_FakeSTT("   "), tts=tts, chat_fn=chat_fn,
-        record_fn=lambda s: b"", frame_source=lambda: iter(()), config=VoiceConfig(),
+        wake_detector=None, stt=_FakeSTT("   "), tts=tts, chat_fn=chat_fn,
+        record_fn=lambda s: b"", config=VoiceConfig(),
     )
     assert loop.listen_once() == ""
     assert called["chat"] is False  # no empty utterance sent to the model
+
+
+def test_run_triggers_listen_once_on_wake():
+    tts = _FakeTTS()
+
+    class _Wake:
+        def listen(self, timeout_seconds):
+            return True
+
+    loop = VoiceLoop(
+        wake_detector=_Wake(), stt=_FakeSTT("what time is it"), tts=tts,
+        chat_fn=lambda text: f"answer: {text}",
+        record_fn=lambda s: b"audio", config=VoiceConfig(),
+    )
+    loop.run(max_wakes=1)
+    # "Yes?" acknowledgement + the chat answer were spoken
+    assert "answer: what time is it" in tts.said
 
 
 def test_get_tts_defaults_to_macos_say():
