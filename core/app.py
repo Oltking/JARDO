@@ -33,10 +33,13 @@ async def lifespan(app: FastAPI):
     app.state.ollama = OllamaClient()
     config = RouterConfig.load()
     app.state.router = CostRouter(config)
-    app.state.classifier = ModelClassifier(
-        app.state.ollama, config.tiers.get("ollama_local", "llama3.2:3b"),
-        HeuristicClassifier(),
-    )
+    if config.classifier == "model":
+        app.state.classifier = ModelClassifier(
+            app.state.ollama, config.tiers.get("ollama_local", "llama3.2:3b"),
+            HeuristicClassifier(),
+        )
+    else:
+        app.state.classifier = HeuristicClassifier()
     yield
     await app.state.arq.aclose()
     await engine.dispose()
@@ -104,6 +107,30 @@ async def list_memory(session: AsyncSession = Depends(get_session)) -> list[dict
         {"id": str(f.id), "kind": f.kind, "content": f.content, "source": f.source}
         for f in facts
     ]
+
+
+class SuperviseRequest(BaseModel):
+    actor: str = "claude-code"
+    tool_name: str
+    tool_input: dict = {}
+    stated_goal: str = ""
+
+
+@app.post("/supervise")
+async def supervise(request: SuperviseRequest,
+                    session: AsyncSession = Depends(get_session)) -> dict:
+    """Answer an external agent's permission question (spec §4.3). Called by the
+    Claude Code PreToolUse hook (mcp/claude-code/)."""
+    from core.supervisor import supervise_tool_call
+
+    decision = await supervise_tool_call(
+        session, request.actor, request.tool_name, request.tool_input,
+        request.stated_goal,
+    )
+    await session.commit()
+    return {
+        "hookSpecificOutput": {"hookEventName": "PreToolUse", **decision}
+    }
 
 
 @app.post("/chat", response_model=ChatResponse)

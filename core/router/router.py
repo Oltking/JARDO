@@ -47,6 +47,9 @@ class RouterConfig:
     tiers: dict = field(default_factory=dict)
     daily_budget_usd: float = 2.0
     est_output_tokens: int = 512
+    # "heuristic" until a local model passes the classification eval (§5.3);
+    # tiny bootstrap models mislabel tasks and would misroute traffic.
+    classifier: str = "heuristic"
     vllm_endpoint: str = ""      # empty = AMD GPU droplet not up (scale-to-zero default)
     vllm_hourly_usd: float = 1.99  # MI300X droplet rate (docs/vendor/amd/*)
     vllm_tokens_per_hour: int = 3_600_000
@@ -59,7 +62,7 @@ class RouterConfig:
             data = tomllib.loads(path.read_text())
             config.tiers = data.get("tiers", {})
             for key in ("daily_budget_usd", "est_output_tokens", "vllm_endpoint",
-                        "vllm_hourly_usd", "vllm_tokens_per_hour"):
+                        "vllm_hourly_usd", "vllm_tokens_per_hour", "classifier"):
                 if key in data:
                     setattr(config, key, data[key])
         return config

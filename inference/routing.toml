@@ -3,6 +3,7 @@
 
 daily_budget_usd = 2.0        # Fireworks daily cap (QUESTIONS.md Q1 suggestion)
 est_output_tokens = 512
+classifier = "heuristic"      # switch to "model" once a local model passes the eval floor
 
 # AMD GPU droplet (scale-to-zero: empty endpoint = not running = not routable).
 # Set to "http://<droplet-ip>:8000/v1" while a vLLM droplet is up.
@@ -11,7 +12,7 @@ vllm_hourly_usd = 1.99        # MI300X rate, docs/vendor/amd/developer-cloud-get
 vllm_tokens_per_hour = 3600000
 
 [tiers]
-ollama_local = "llama3.2:3b"
+ollama_local = "qwen2.5:0.5b"   # small-network bootstrap; upgrade to llama3.2:3b later
 vllm_large = ""               # set when a vLLM droplet is provisioned (Phase 2b)
 fireworks_cheap = "fireworks/gpt-oss-20b"
 fireworks_mid = "fireworks/minimax-m2p7"

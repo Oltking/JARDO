@@ -1,0 +1,16 @@
+{
+  "//": "Merge the hooks block into ~/.claude/settings.json (or a project .claude/settings.json). Source contract: docs/vendor/claude-code/hooks-reference.md. JARVIS core must be running (uv run jarvis serve) for decisions; if it is down the hook stays silent and normal permission prompts apply.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/macbookpro/projects/JARVIS/mcp/claude-code/jarvis_pretooluse_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
