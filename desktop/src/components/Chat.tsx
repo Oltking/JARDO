@@ -78,7 +78,7 @@ export function Chat() {
     <div className="chat">
       {needsSetup && (
         <div className="banner warn" role="alert">
-          JARVIS isn't set up yet. Run <code>jarvis setup</code> in your terminal
+          Jardo isn't set up yet. Run <code>jardo setup</code> in your terminal
           to configure identity, keys, and the model backend, then try again.
         </div>
       )}
@@ -91,7 +91,7 @@ export function Chat() {
       <div className="messages" ref={scrollRef}>
         {messages.length === 0 && (
           <div className="empty">
-            Ask JARVIS anything. Messages POST to <code>/chat</code> and thread by
+            Ask Jardo anything. Messages POST to <code>/chat</code> and thread by
             conversation id.
           </div>
         )}
@@ -112,7 +112,7 @@ export function Chat() {
       <div className="composer">
         <textarea
           value={input}
-          placeholder="Message JARVIS…  (Enter to send, Shift+Enter for newline)"
+          placeholder="Message Jardo…  (Enter to send, Shift+Enter for newline)"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           rows={2}

@@ -19,7 +19,7 @@ from core.inference.fireworks import FireworksClient, FireworksError
 from core.memory import MemoryStore
 from core.reporter import generate_report
 
-logger = logging.getLogger("jarvis.worker")
+logger = logging.getLogger("jardo.worker")
 
 _EXTRACTION_PROMPT = """\
 You extract durable personal facts from a conversation exchange.

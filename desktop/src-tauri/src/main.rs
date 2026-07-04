@@ -4,5 +4,5 @@
 // start-project-structure.md: keep main.rs a thin shim; real logic is in lib.rs
 // so desktop and mobile share one entry point.
 fn main() {
-    jarvis_desktop_lib::run()
+    jardo_desktop_lib::run()
 }

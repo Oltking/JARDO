@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse hook → JARVIS Agent Supervisor.
+"""Claude Code PreToolUse hook → Jardo Agent Supervisor.
 
 Contract source: docs/vendor/claude-code/hooks-reference.md
   - stdin: JSON with tool_name, tool_input, tool_use_id
@@ -7,7 +7,7 @@ Contract source: docs/vendor/claude-code/hooks-reference.md
              "permissionDecision": allow|deny|ask, "permissionDecisionReason": ...}}
   - exit 0 with no output = no decision (normal permission flow continues)
 
-Fail-open BY DESIGN: if the JARVIS core is down or errors, this hook stays
+Fail-open BY DESIGN: if the Jardo core is down or errors, this hook stays
 silent — Claude Code's own permission prompts still guard everything (staying
 silent never approves anything, per the hooks doc). Stdlib only; no deps.
 
@@ -18,7 +18,7 @@ import json
 import sys
 import urllib.request
 
-JARVIS_SUPERVISE_URL = "http://127.0.0.1:8000/supervise"
+JARDO_SUPERVISE_URL = "http://127.0.0.1:8000/supervise"
 TIMEOUT_SECONDS = 10
 
 
@@ -35,14 +35,14 @@ def main() -> int:
     }).encode()
 
     request = urllib.request.Request(
-        JARVIS_SUPERVISE_URL, data=payload,
+        JARDO_SUPERVISE_URL, data=payload,
         headers={"Content-Type": "application/json"}, method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             decision = json.load(response)
     except Exception:
-        return 0  # JARVIS unreachable → silent → normal permission flow
+        return 0  # Jardo unreachable → silent → normal permission flow
 
     if "hookSpecificOutput" in decision:
         json.dump(decision, sys.stdout)

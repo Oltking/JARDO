@@ -1,4 +1,4 @@
-"""Wake-word detection via openWakeWord (spec §8: wake word "JARVIS").
+"""Wake-word detection via openWakeWord (spec §8: wake word "Jardo").
 
 Source: docs/vendor/voice/openwakeword-readme.md (documents an older API; the
 installed openwakeword==0.4.0 differs — verified live 2026-07-04):
@@ -10,7 +10,8 @@ installed openwakeword==0.4.0 differs — verified live 2026-07-04):
   # → {"hey_jarvis_v0.1": score in [0,1]}; default positive threshold 0.5
 
 The pretrained "hey jarvis" model ships bundled with the pip package — no
-download needed. Custom "JARVIS"-only training is a later refinement (§4.7).
+download needed (its filename is the openWakeWord model id, unrelated to the
+Jardo brand). Custom "Jardo"-only wake training is a later refinement (§4.7).
 """
 
 DEFAULT_THRESHOLD = 0.5
@@ -54,7 +55,9 @@ class WakeWordDetector:
 # reuses the proven STT path — capture short windows, skip silence, transcribe,
 # and trigger when the wake word appears. Heavier on CPU than a dedicated wake
 # model, fine for a single-user MVP.
-_WAKE_PHRASES = ("jarvis", "hey jarvis", "javis", "hey javis")  # whisper variants
+# Brand wake word is "Jardo" (BRANDING.md). whisper mishears it various ways;
+# match generously. "hey jarvis"/"javis" kept as transitional aliases.
+_WAKE_PHRASES = ("jardo", "hey jardo", "jardu", "jarda", "jar do", "hey jarvis", "javis")
 _SILENCE_GATE = 0.02  # skip transcribing windows quieter than this
 
 

@@ -1,7 +1,7 @@
 [project]
-name = "jarvis-core"
+name = "jardo-core"
 version = "0.1.0"
-description = "JARVIS master agent — core backend (see JARVIS_BUILD_SPEC.md)"
+description = "Jardo master agent — core backend (see JARDO_BUILD_SPEC.md)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -30,8 +30,8 @@ dev = [
 ]
 
 [project.scripts]
-jarvis = "core.cli:app"
-jarvis-mcp = "core.mcp_server.server:main"
+jardo = "core.cli:app"
+jardo-mcp = "core.mcp_server.server:main"
 
 [project.optional-dependencies]
 voice = [

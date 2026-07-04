@@ -34,8 +34,8 @@ async def _deny(_request: ActionRequest) -> Verdict:
 async def test_pty_runs_approved_command_and_reads_output():
     term = PtyTerminal(_approve)
     try:
-        result = await term.run("echo hello-from-jarvis", "print a greeting")
-        assert "hello-from-jarvis" in result.output
+        result = await term.run("echo hello-from-jardo", "print a greeting")
+        assert "hello-from-jardo" in result.output
         assert result.exit_status == 0
     finally:
         term.close()

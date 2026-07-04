@@ -1,4 +1,4 @@
-// API layer for the JARVIS desktop shell.
+// API layer for the Jardo desktop shell.
 //
 // All backend traffic is proxied through the Rust side via Tauri commands
 // (see src-tauri/src/lib.rs). Proxying through Rust with reqwest avoids the

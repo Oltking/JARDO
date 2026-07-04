@@ -9,7 +9,7 @@ from core import secrets
 
 pytestmark = pytest.mark.skipif(sys.platform != "darwin", reason="macOS Keychain only")
 
-TEST_SERVICE = f"jarvis.test.{uuid.uuid4().hex[:8]}"
+TEST_SERVICE = f"jardo.test.{uuid.uuid4().hex[:8]}"
 
 
 def test_write_read_delete_roundtrip():
@@ -25,4 +25,4 @@ def test_write_read_delete_roundtrip():
 
 
 def test_read_missing_returns_none():
-    assert secrets.read_secret("jarvis.test.does-not-exist") is None
+    assert secrets.read_secret("jardo.test.does-not-exist") is None

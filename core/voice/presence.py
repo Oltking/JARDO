@@ -1,6 +1,6 @@
 """Presence-confirmation ritual (spec §8, verbatim behavior).
 
-When JARVIS is about to engage a task autonomously and voice is enabled, it
+When Jardo is about to engage a task autonomously and voice is enabled, it
 speaks the plan and asks the owner to say their own name to confirm presence.
 On ~10s silence it says the silence line and proceeds ONLY within pre-approved
 policy bounds; anything needing live consent is queued for the owner.
@@ -8,7 +8,7 @@ policy bounds; anything needing live consent is queued for the owner.
 CRITICAL (SECURITY.md rule 6, §4.1): saying the name establishes **presence, not
 identity**. A spoken name is trivially spoofable, so this ritual never authorizes
 a destructive action — those still require TOTP. The outcome only decides whether
-JARVIS may proceed autonomously-within-policy vs. wait for live consent.
+Jardo may proceed autonomously-within-policy vs. wait for live consent.
 
 Pure logic: `speak_fn` and `listen_for_name_fn` are injected, so the ritual is
 fully testable without audio hardware. The voice loop wires in the real TTS/STT.

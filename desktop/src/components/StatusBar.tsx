@@ -44,7 +44,7 @@ export function StatusBar({ onKillSwitch, hotkeyLabel, killFlash }: Props) {
     <header className="statusbar">
       <div className="brand">
         <span className="logo">◆</span>
-        <span className="title">JARVIS</span>
+        <span className="title">Jardo</span>
       </div>
 
       <div className="conn">
@@ -53,7 +53,7 @@ export function StatusBar({ onKillSwitch, hotkeyLabel, killFlash }: Props) {
           {conn === "online"
             ? `core online · db:${detail?.db ?? "?"} · redis:${detail?.redis ?? "?"}`
             : conn === "offline"
-            ? "core offline — is `uv run jarvis serve` running?"
+            ? "core offline — is `uv run jardo serve` running?"
             : "connecting…"}
         </span>
       </div>

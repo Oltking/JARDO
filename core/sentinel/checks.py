@@ -2,7 +2,7 @@
 
 LEGAL BOUNDARY (SECURITY.md rule 2, spec §6.3): nothing in this module may probe,
 scan, fuzz, or otherwise actively test a third-party system. Network checks are
-limited to properties of connections JARVIS was already asked to make (scheme,
+limited to properties of connections Jardo was already asked to make (scheme,
 TLS validity) and locally computable inspection of code/text. Active scanning of
 systems the owner does not own is illegal without written authorization.
 """

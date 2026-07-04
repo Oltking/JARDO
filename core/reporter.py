@@ -115,7 +115,7 @@ def render_body(stats: ReportStats, honorific: str = "sir") -> str:
             parts.append(f"⚠ {s.security_events} security event(s) flagged — see audit log.")
         return " ".join(parts)
 
-    lines = [f"JARVIS {s.period} report, {honorific}.",
+    lines = [f"Jardo {s.period} report, {honorific}.",
              f"Window: {s.window_start:%Y-%m-%d %H:%M} → {s.window_end:%Y-%m-%d %H:%M} UTC.",
              "",
              f"• Conversation: {s.chat_messages} messages, {s.tokens} tokens.",

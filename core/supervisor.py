@@ -7,7 +7,7 @@ Claude Code integration contract (docs/vendor/claude-code/hooks-reference.md):
              "permissionDecision": "allow"|"deny"|"ask",
              "permissionDecisionReason": "..."}}
   Exit 0 / no output = no decision (normal permission flow continues).
-Verdict mapping: approve→allow, deny→deny, everything else→ask. JARVIS never
+Verdict mapping: approve→allow, deny→deny, everything else→ask. Jardo never
 silently widens permissions: "ask" hands the decision back to the owner.
 """
 
@@ -52,7 +52,7 @@ def review_to_decision(review: ActionReview) -> dict:
     return {
         "permissionDecision": _DECISION[review.verdict],
         "permissionDecisionReason": (
-            f"JARVIS sentinel: {review.verdict} (severity={review.severity}, "
+            f"Jardo sentinel: {review.verdict} (severity={review.severity}, "
             f"tier={review.tier})" + (f" — {'; '.join(reasons)}" if reasons else "")
         ),
     }

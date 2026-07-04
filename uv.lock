@@ -673,7 +673,7 @@ wheels = [
 ]
 
 [[package]]
-name = "jarvis-core"
+name = "jardo-core"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

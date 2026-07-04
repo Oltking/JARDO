@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bring up the full JARVIS dev stack (spec §9 demo prerequisites).
+# Bring up the full Jardo dev stack (spec §9 demo prerequisites).
 # Idempotent: safe to run repeatedly. Nothing here needs an API key.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -53,8 +53,8 @@ if ! pgrep -f "arq core.worker.WorkerSettings" >/dev/null 2>&1; then
 fi
 
 echo
-echo "JARVIS dev stack is up:"
+echo "Jardo dev stack is up:"
 curl -s http://127.0.0.1:8000/healthz | sed 's/^/    health: /'
 echo "    api log:    .run/api.log     (stop: scripts/dev-down.sh)"
 echo "    worker log: .run/worker.log"
-echo "    next: 'uv run jarvis chat' (CLI) or 'pnpm tauri dev' in desktop/ (GUI)"
+echo "    next: 'uv run jardo chat' (CLI) or 'pnpm tauri dev' in desktop/ (GUI)"

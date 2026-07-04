@@ -1,5 +1,5 @@
 """WhisperWakeDetector — the STT-based wake detector (openWakeWord is non-
-functional in this env; see jarvis-wakeword-todo). Phrase matching is pure
+functional in this env; see jardo-wakeword-todo). Phrase matching is pure
 logic; the listen() loop is exercised with a fake mic via monkeypatch."""
 
 import numpy as np
@@ -18,9 +18,9 @@ class _FakeSTT:
 
 def test_matches_wake_phrases():
     det = WhisperWakeDetector(_FakeSTT(""))
-    assert det._matches("hey jarvis, what's up")
-    assert det._matches("JARVIS")
-    assert det._matches("ok javis")  # whisper mishears jarvis as javis
+    assert det._matches("hey jardo, what's up")
+    assert det._matches("JARDO")
+    assert det._matches("ok jardu")  # whisper mishears the brand
     assert not det._matches("hello there computer")
 
 
@@ -30,7 +30,7 @@ def test_listen_triggers_on_wake_word(monkeypatch):
     loud = (np.ones(40000) * 8000).astype(np.int16)
     monkeypatch.setattr(mic, "record_seconds", lambda s: loud)
 
-    det = WhisperWakeDetector(_FakeSTT("hey jarvis"), window_seconds=0.1)
+    det = WhisperWakeDetector(_FakeSTT("hey jardo"), window_seconds=0.1)
     assert det.listen(timeout_seconds=5) is True
 
 
@@ -44,7 +44,7 @@ def test_listen_skips_silence_without_transcribing(monkeypatch):
     class _CountingSTT:
         def transcribe(self, audio):
             calls["n"] += 1
-            return "jarvis"
+            return "jardo"
 
     det = WhisperWakeDetector(_CountingSTT(), window_seconds=0.05)
     # all windows are silent → gated out → never transcribed → times out

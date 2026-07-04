@@ -8,7 +8,7 @@ Two backends behind one interface:
   named engine. Source: docs/vendor/voice/piper-cli.md, piper-voices.md. Enabled
   by config once a voice model is downloaded; falls back to `say` if unavailable.
 
-The spec names Piper/Kokoro; `say` is the pragmatic default so JARVIS has a
+The spec names Piper/Kokoro; `say` is the pragmatic default so Jardo has a
 voice before any model download. Swappable via settings.voice_tts_backend.
 """
 
@@ -47,7 +47,7 @@ class PiperTTS:
         self._bin = piper_bin
 
     def speak(self, text: str) -> None:
-        wav = "/tmp/jarvis_piper.wav"
+        wav = "/tmp/jardo_piper.wav"
         self.synthesize_to_wav(text, wav)
         subprocess.run(["afplay", wav], check=False)
 

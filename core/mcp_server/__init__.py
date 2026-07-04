@@ -1,7 +1,7 @@
-"""JARVIS MCP server package (spec §4.3 — the Agent Supervisor exposed over MCP).
+"""Jardo MCP server package (spec §4.3 — the Agent Supervisor exposed over MCP).
 
 Other agents (Claude Code, Cursor, terminal agents) call this server's tools to
-have JARVIS review and gate their proposed actions through the Security Sentinel
+have Jardo review and gate their proposed actions through the Security Sentinel
 (spec §6) before they execute. The server reuses core.sentinel.broker.Sentinel
 verbatim — no supervision logic is reimplemented here.
 

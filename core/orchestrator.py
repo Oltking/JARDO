@@ -29,7 +29,7 @@ from core.schema import Task
 from core.sentinel.broker import Sentinel
 from core.sentinel.models import ActionRequest, Verdict
 
-logger = logging.getLogger("jarvis.orchestrator")
+logger = logging.getLogger("jardo.orchestrator")
 
 # executor(task, session) -> result string; may raise to trigger retry/backoff.
 Executor = Callable[[Task, AsyncSession], Awaitable[str]]
@@ -168,7 +168,7 @@ class Orchestrator:
 
 async def run_forever(orchestrator: Orchestrator, session_factory,
                       poll_interval: float = 1.0) -> None:  # pragma: no cover
-    """Long-running driver loop for `jarvis run` (24h unattended, §4.2)."""
+    """Long-running driver loop for `jardo run` (24h unattended, §4.2)."""
     async with session_factory() as session:
         await orchestrator.resume_stuck(session)
         await session.commit()

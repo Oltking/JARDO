@@ -17,10 +17,10 @@ def test_unknown_pronoun_defaults_to_sir():
 
 
 def test_facts_injected():
-    facts = [SimpleNamespace(content="Owner builds JARVIS"),
+    facts = [SimpleNamespace(content="Owner builds Jardo"),
              SimpleNamespace(content="Prefers macOS")]
     prompt = build_system_prompt(_owner(), facts)
-    assert "- Owner builds JARVIS" in prompt
+    assert "- Owner builds Jardo" in prompt
     assert "- Prefers macOS" in prompt
 
 

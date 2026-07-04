@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "JARVIS",
+  "productName": "Jardo",
   "version": "0.1.0",
-  "identifier": "com.jarvis.desktop",
+  "identifier": "com.jardo.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "JARVIS",
+        "title": "Jardo",
         "width": 900,
         "height": 680,
         "minWidth": 520,
@@ -37,8 +37,8 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
-    "shortDescription": "JARVIS personal master-agent desktop shell",
-    "longDescription": "JARVIS desktop shell: chat with the core, review Permission Broker escalations, and a global kill-switch. Talks to the local core at 127.0.0.1:8000.",
+    "shortDescription": "Jardo personal master-agent desktop shell",
+    "longDescription": "Jardo desktop shell: chat with the core, review Permission Broker escalations, and a global kill-switch. Talks to the local core at 127.0.0.1:8000.",
     "macOS": {
       "minimumSystemVersion": "10.15",
       "dmg": {

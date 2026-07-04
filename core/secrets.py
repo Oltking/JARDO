@@ -15,10 +15,10 @@ read_secret() so Phase 3 can hook the audit log in one place.
 import subprocess
 import sys
 
-_ACCOUNT = "jarvis"
+_ACCOUNT = "jardo"
 
-FIREWORKS_API_KEY = "jarvis.fireworks_api_key"
-DEVICE_PRIVATE_KEY = "jarvis.device_private_key"
+FIREWORKS_API_KEY = "jardo.fireworks_api_key"
+DEVICE_PRIVATE_KEY = "jardo.device_private_key"
 
 
 class SecretsUnavailableError(RuntimeError):

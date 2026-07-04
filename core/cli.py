@@ -1,11 +1,11 @@
-"""JARVIS CLI (Phase 1): setup, serve, chat, facts.
+"""Jardo CLI (Phase 1): setup, serve, chat, facts.
 
 Demo (spec §9 Phase 1): owner chats via CLI; memory persists across restarts.
   1. docker compose -f infra/docker-compose.yml up -d
-  2. uv run jarvis setup          (identity + Fireworks key → Keychain)
-  3. uv run jarvis serve          (terminal A)
+  2. uv run jardo setup          (identity + Fireworks key → Keychain)
+  3. uv run jardo serve          (terminal A)
   4. uv run arq core.worker.WorkerSettings   (terminal B, optional: fact extraction)
-  5. uv run jarvis chat           (terminal C)
+  5. uv run jardo chat           (terminal C)
 """
 
 import asyncio
@@ -33,7 +33,7 @@ def setup() -> None:
     from core.identity import create_owner
     from core.memory import MemoryStore
 
-    console.print("[bold]JARVIS first-run setup[/bold] — identity is per-user (QUESTIONS.md Q2).")
+    console.print("[bold]Jardo first-run setup[/bold] — identity is per-user (QUESTIONS.md Q2).")
 
     # Migrations first, so a fresh clone works with exactly this one command.
     result = subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"])
@@ -48,7 +48,7 @@ def setup() -> None:
                 console.print("[yellow]Owner already exists — setup is idempotent, skipping "
                               "identity creation.[/yellow]")
             else:
-                name = Prompt.ask("Name JARVIS should call you")
+                name = Prompt.ask("Name Jardo should call you")
                 pronoun = Prompt.ask("Honorific", choices=["sir", "ma"], default="sir")
                 email = Prompt.ask("Identity email")
                 owner = await create_owner(session, name, pronoun, email)
@@ -71,8 +71,8 @@ def setup() -> None:
                           "(QUESTIONS.md Q1).[/yellow]")
 
     asyncio.run(_run())
-    console.print("Setup complete. Next: [bold]uv run jarvis serve[/bold] then "
-                  "[bold]uv run jarvis chat[/bold]")
+    console.print("Setup complete. Next: [bold]uv run jardo serve[/bold] then "
+                  "[bold]uv run jardo chat[/bold]")
 
 
 @app.command()
@@ -87,7 +87,7 @@ def serve() -> None:
 def chat() -> None:
     """Interactive chat REPL against the running core."""
     conversation_id: str | None = None
-    console.print("[bold]JARVIS[/bold] — type /quit to exit.")
+    console.print("[bold]Jardo[/bold] — type /quit to exit.")
     while True:
         try:
             user_input = console.input("[bold cyan]you ›[/bold cyan] ").strip()
@@ -104,7 +104,7 @@ def chat() -> None:
             response = httpx.post(f"{_BASE}/chat", json=payload,
                                   timeout=settings.request_timeout_seconds + 10)
         except httpx.ConnectError:
-            console.print(f"[red]Core not reachable at {_BASE}. Run: uv run jarvis serve[/red]")
+            console.print(f"[red]Core not reachable at {_BASE}. Run: uv run jardo serve[/red]")
             raise typer.Exit(1)
         if response.status_code != 200:
             console.print(f"[red]{response.status_code}: "
@@ -112,7 +112,7 @@ def chat() -> None:
             continue
         data = response.json()
         conversation_id = data["conversation_id"]
-        console.print(f"[bold magenta]jarvis ›[/bold magenta] {data['reply']}")
+        console.print(f"[bold magenta]jardo ›[/bold magenta] {data['reply']}")
         usage = f"{data['model']} · {data['prompt_tokens']}+{data['completion_tokens']} tok"
         console.print(f"[dim]{usage}[/dim]")
 
@@ -238,7 +238,7 @@ def inbox(limit: int = 10) -> None:
                 select(Report).order_by(Report.created_at.desc()).limit(limit)
             )).scalars().all()
             if not rows:
-                console.print("Inbox empty. Generate one: jarvis report --period daily")
+                console.print("Inbox empty. Generate one: jardo report --period daily")
             for row in rows:
                 console.print(f"[dim]{row.created_at:%m-%d %H:%M}[/dim] "
                               f"[bold]{row.period}[/bold] "
@@ -280,14 +280,14 @@ def sentinel_demo() -> None:
                     console.print(f"    · {finding.check}: {finding.message}")
             await session.commit()
         console.print("\nAll reviews are in the append-only audit log; escalations in "
-                      "[bold]jarvis approvals[/bold].")
+                      "[bold]jardo approvals[/bold].")
 
     asyncio.run(_run())
 
 
 @app.command(name="mcp-server")
 def mcp_server() -> None:
-    """Phase 4 (spec §4.3): run the JARVIS MCP server (Agent Supervisor) over
+    """Phase 4 (spec §4.3): run the Jardo MCP server (Agent Supervisor) over
     stdio so other agents can call it for action approvals."""
     from core.mcp_server.server import main
 
@@ -329,7 +329,7 @@ def approvals(decide: str = "", approve: bool = True) -> None:
 
 @app.command()
 def say(text: str) -> None:
-    """Speak text in JARVIS's voice (spec §8). Quick TTS check."""
+    """Speak text in Jardo's voice (spec §8). Quick TTS check."""
     from core.voice.tts import get_tts
     get_tts(settings.voice_tts_backend if hasattr(settings, "voice_tts_backend") else "say").speak(text)
 
@@ -338,7 +338,7 @@ def say(text: str) -> None:
 def voice_setup() -> None:
     """First-run voice permission walkthrough (spec §8): each permission, in
     order, with a plain-language reason, granted individually."""
-    console.print("[bold]JARVIS voice & permissions setup[/bold]\n")
+    console.print("[bold]Jardo voice & permissions setup[/bold]\n")
     steps = [
         ("Microphone", "so I can hear your wake word and commands. Audio is "
          "transcribed locally — nothing is sent to the cloud.", True),
@@ -367,9 +367,9 @@ def voice_setup() -> None:
         else:
             console.print("  [green]noted[/green]\n")
     console.print("Optional: record a short voice sample to strengthen the presence "
-                  "ritual (speaker verification, §2.5b) — run [bold]jarvis voice-sample[/bold] later.")
-    console.print("\nDone. Try [bold]jarvis listen[/bold] (tap-to-talk) or "
-                  "[bold]jarvis voice[/bold] (wake word).")
+                  "ritual (speaker verification, §2.5b) — run [bold]jardo voice-sample[/bold] later.")
+    console.print("\nDone. Try [bold]jardo listen[/bold] (tap-to-talk) or "
+                  "[bold]jardo voice[/bold] (wake word).")
 
 
 @app.command()
@@ -392,13 +392,13 @@ def listen() -> None:
     loop = VoiceLoop(wake_detector=None, stt=SpeechToText(), tts=get_tts("say"),
                      chat_fn=chat_fn, record_fn=record_seconds, config=VoiceConfig())
     reply = loop.listen_once()
-    console.print(f"[magenta]jarvis:[/magenta] {reply}" if reply
+    console.print(f"[magenta]jardo:[/magenta] {reply}" if reply
                   else "[dim](heard nothing)[/dim]")
 
 
 @app.command()
 def voice() -> None:
-    """Run the wake-word voice loop: say 'hey JARVIS' to talk (§8)."""
+    """Run the wake-word voice loop: say 'hey Jardo' to talk (§8)."""
     from core.voice.loop import VoiceLoop, VoiceConfig
     from core.voice.mic import record_seconds
     from core.voice.stt import SpeechToText
@@ -413,9 +413,9 @@ def voice() -> None:
 
     stt = SpeechToText()
     stt._ensure_model()
-    console.print("[bold]Voice loop starting. Say 'hey JARVIS'. Ctrl-C to stop.[/bold]")
+    console.print("[bold]Voice loop starting. Say 'hey Jardo'. Ctrl-C to stop.[/bold]")
     # STT-based wake detection (openWakeWord is non-functional here; see
-    # jarvis-wakeword-todo). Reuses the proven transcription path.
+    # jardo-wakeword-todo). Reuses the proven transcription path.
     loop = VoiceLoop(wake_detector=WhisperWakeDetector(stt), stt=stt, tts=get_tts("say"),
                      chat_fn=chat_fn, record_fn=record_seconds, config=VoiceConfig())
     try:

@@ -13,9 +13,9 @@
 set -euo pipefail
 
 MODEL="${1:?usage: provision-vllm-droplet.sh <model-id> [droplet-name]}"
-NAME="${2:-jarvis-vllm}"
-REGION="${JARVIS_GPU_REGION:-atl1}"
-SIZE="${JARVIS_GPU_SIZE:-gpu-mi300x1-192gb}"
+NAME="${2:-jardo-vllm}"
+REGION="${JARDO_GPU_REGION:-atl1}"
+SIZE="${JARDO_GPU_SIZE:-gpu-mi300x1-192gb}"
 
 echo ">> creating droplet $NAME ($SIZE, $REGION) — billing starts NOW (~\$1.99/hr)"
 doctl compute droplet create "$NAME" \

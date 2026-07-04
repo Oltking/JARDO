@@ -1,6 +1,6 @@
 """Voice loop (spec §8): wake word → STT → intent → TTS reply.
 
-Wake ("hey jarvis") → capture a short utterance → transcribe locally → send to
+Wake ("hey jardo") → capture a short utterance → transcribe locally → send to
 the core /chat endpoint (same routing/memory as text chat) → speak the reply.
 Tap-to-talk is the alternative entry (listen_once) when wake-word is off.
 
@@ -12,7 +12,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
-logger = logging.getLogger("jarvis.voice")
+logger = logging.getLogger("jardo.voice")
 
 
 @dataclass
@@ -45,7 +45,7 @@ class VoiceLoop:
 
     def run(self, max_wakes: int | None = None) -> None:  # pragma: no cover (hardware loop)
         """Blocking wake-word loop. max_wakes bounds it for testing/demo."""
-        self._tts.speak("Voice loop ready. Say, hey JARVIS, to begin.")
+        self._tts.speak("Voice loop ready. Say, hey Jardo, to begin.")
         wakes = 0
         while True:
             if self._wake.listen(timeout_seconds=3600):

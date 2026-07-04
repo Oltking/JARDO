@@ -1,4 +1,4 @@
-"""PTY terminal control (spec §7.2): JARVIS owns a real PTY.
+"""PTY terminal control (spec §7.2): Jardo owns a real PTY.
 
 It reads command output and types commands programmatically — it does NOT
 blind-inject keystrokes into whatever terminal happens to be focused (§7.2).
@@ -37,11 +37,11 @@ class PtyTerminal:
     """A single long-lived shell session driven over a real PTY."""
 
     def __init__(self, review_fn: ReviewFn, shell: str = "/bin/bash",
-                 actor: str = "jarvis", timeout: float = 30.0):
+                 actor: str = "jardo", timeout: float = 30.0):
         self._review_fn = review_fn
         self._actor = actor
         self._timeout = timeout
-        self._prompt = "JARVIS_PTY_PROMPT>> "
+        self._prompt = "JARDO_PTY_PROMPT>> "
         self._child = pexpect.spawn(shell, encoding="utf-8", echo=False,
                                     timeout=timeout)
         # Deterministic prompt so we can reliably delimit command output.

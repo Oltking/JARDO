@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop the JARVIS dev stack started by dev-up.sh. Leaves Docker volumes intact.
+# Stop the Jardo dev stack started by dev-up.sh. Leaves Docker volumes intact.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 

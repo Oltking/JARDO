@@ -1,4 +1,4 @@
-"""JARVIS MCP server (spec §4.3): the Agent Supervisor exposed as an MCP server.
+"""Jardo MCP server (spec §4.3): the Agent Supervisor exposed as an MCP server.
 
 Built with the official Python SDK's FastMCP over stdio transport, per
   docs/vendor/mcp/quickstart-build-server.md  (Python: `from mcp.server.fastmcp
@@ -32,9 +32,9 @@ from core.schema import Approval
 from core.sentinel.broker import Sentinel, decide_pending
 from core.sentinel.models import ActionRequest, ActionReview
 
-logger = logging.getLogger("jarvis.mcp")
+logger = logging.getLogger("jardo.mcp")
 
-mcp = FastMCP("jarvis-supervisor")
+mcp = FastMCP("jardo-supervisor")
 
 
 # ---------- serialization -------------------------------------------------
@@ -113,7 +113,7 @@ async def decide_approval_impl(
 async def request_action_approval(
     actor: str, action_type: str, target: str, stated_goal: str
 ) -> dict:
-    """Run a proposed action through JARVIS's Security Sentinel and return the
+    """Run a proposed action through Jardo's Security Sentinel and return the
     structured Action Review (spec §4.3).
 
     Args:
@@ -158,13 +158,13 @@ async def decide_approval(approval_id: str, approve: bool) -> dict:
 
 
 def main() -> None:
-    """Start the JARVIS MCP server over stdio (the standard MCP transport).
+    """Start the Jardo MCP server over stdio (the standard MCP transport).
 
     Per quickstart-build-server.md, stdio servers must keep stdout clean for the
     JSON-RPC stream — logging is pinned to stderr here.
     """
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
-    logger.info("Starting JARVIS MCP server (jarvis-supervisor) on stdio")
+    logger.info("Starting Jardo MCP server (jardo-supervisor) on stdio")
     mcp.run(transport="stdio")
 
 

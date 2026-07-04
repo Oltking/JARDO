@@ -23,7 +23,7 @@ export default function App() {
   useEffect(() => {
     const unlisten = listen<{ source: string }>("kill-switch", (event) => {
       // eslint-disable-next-line no-console
-      console.warn("[JARVIS] kill-switch fired from", event.payload?.source);
+      console.warn("[Jardo] kill-switch fired from", event.payload?.source);
       setKillFlash(true);
       window.setTimeout(() => setKillFlash(false), 2500);
     });

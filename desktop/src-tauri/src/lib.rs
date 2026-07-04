@@ -1,4 +1,4 @@
-// JARVIS desktop shell — Rust core (Phase 5).
+// Jardo desktop shell — Rust core (Phase 5).
 //
 // Responsibilities:
 //   * Proxy the frontend's backend traffic to the core at 127.0.0.1:8000 via
@@ -20,7 +20,7 @@ use tauri::{
 
 /// Base URL of the core. Overridable for tests / non-default deployments.
 fn core_base() -> String {
-    std::env::var("JARVIS_CORE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
+    std::env::var("JARDO_CORE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
 }
 
 /// Error surfaced to the frontend. `status` mirrors the HTTP status code so the
@@ -47,7 +47,7 @@ fn client() -> Result<reqwest::Client, ApiError> {
 }
 
 /// Deserialize a successful JSON response, mapping non-2xx to a status-bearing
-/// `ApiError` so the frontend can react (e.g. show the "run jarvis setup" banner
+/// `ApiError` so the frontend can react (e.g. show the "run jardo setup" banner
 /// on 409).
 async fn parse_json<T: for<'de> Deserialize<'de>>(
     resp: reqwest::Response,
@@ -238,7 +238,7 @@ async fn voice_transcribe(seconds: f32) -> Result<TranscribeResult, ApiError> {
     parse_json(resp).await
 }
 
-/// Speak text in JARVIS's voice (§8).
+/// Speak text in Jardo's voice (§8).
 #[tauri::command]
 async fn voice_say(text: String) -> Result<SayResult, ApiError> {
     let resp = client()?
@@ -262,7 +262,7 @@ fn kill_switch(app: AppHandle, source: String) -> Result<(), String> {
 fn fire_kill_switch(app: &AppHandle, source: &str) {
     // Phase 7 will additionally call enigo/OS APIs to halt synthetic input.
     log::warn!("KILL-SWITCH engaged (source: {source}) — halting synthetic input (stub)");
-    eprintln!("[JARVIS] KILL-SWITCH engaged (source: {source})");
+    eprintln!("[Jardo] KILL-SWITCH engaged (source: {source})");
     let _ = app.emit("kill-switch", serde_json::json!({ "source": source }));
 }
 
@@ -287,7 +287,7 @@ fn hide_main(app: &AppHandle) {
 /// Build the tray icon + menu (system-tray.md). Menu items:
 ///   show / hide window, kill-switch stub, quit.
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let show_i = MenuItem::with_id(app, "show", "Show JARVIS", true, None::<&str>)?;
+    let show_i = MenuItem::with_id(app, "show", "Show Jardo", true, None::<&str>)?;
     let hide_i = MenuItem::with_id(app, "hide", "Hide window", true, None::<&str>)?;
     let kill_i = MenuItem::with_id(
         app,
@@ -297,13 +297,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let quit_i = MenuItem::with_id(app, "quit", "Quit JARVIS", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "quit", "Quit Jardo", true, None::<&str>)?;
 
     let menu = Menu::with_items(app, &[&show_i, &hide_i, &sep, &kill_i, &sep, &quit_i])?;
 
-    TrayIconBuilder::with_id("jarvis-tray")
+    TrayIconBuilder::with_id("jardo-tray")
         .icon(app.default_window_icon().unwrap().clone())
-        .tooltip("JARVIS")
+        .tooltip("Jardo")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -355,5 +355,5 @@ pub fn run() {
             kill_switch
         ])
         .run(tauri::generate_context!())
-        .expect("error while running JARVIS desktop app");
+        .expect("error while running Jardo desktop app");
 }

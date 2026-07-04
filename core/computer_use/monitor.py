@@ -1,7 +1,7 @@
 """Background awareness (spec §7.1): what's happening beyond the foreground.
 
 psutil-based snapshots of processes, resource use, and network connections, so
-JARVIS knows the machine's state. Read-only — pure perception, no control.
+Jardo knows the machine's state. Read-only — pure perception, no control.
 Source: docs/vendor/computer-use/psutil-api-docs.md
 """
 

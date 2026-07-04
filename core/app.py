@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title="JARVIS core", lifespan=lifespan)
+app = FastAPI(title="Jardo core", lifespan=lifespan)
 
 # Loopback-only in Phase 1; the Tauri desktop webview (tauri://, localhost dev
 # server) calls this API directly. Remote origins get nothing (mTLS arrives §5).
@@ -145,7 +145,7 @@ async def list_memory(session: AsyncSession = Depends(get_session)) -> list[dict
     store = MemoryStore(session)
     owner = await store.get_owner()
     if owner is None:
-        raise HTTPException(status_code=409, detail="Not set up. Run: jarvis setup")
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
     facts = await store.list_facts(owner.id)
     return [
         {"id": str(f.id), "kind": f.kind, "content": f.content, "source": f.source}
@@ -251,7 +251,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     store = MemoryStore(session)
     owner = await store.get_owner()
     if owner is None:
-        raise HTTPException(status_code=409, detail="Not set up. Run: jarvis setup")
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
 
     if request.conversation_id is not None:
         conversation = await store.get_conversation(request.conversation_id)

@@ -1,4 +1,4 @@
-"""Tests for the JARVIS MCP server tools (spec §4.3).
+"""Tests for the Jardo MCP server tools (spec §4.3).
 
 We exercise the session-injected `*_impl` coroutines directly with the pytest
 `session` fixture (conftest.py) — no live stdio transport required — mirroring

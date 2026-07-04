@@ -87,7 +87,7 @@ export function Voice() {
     <div className="voice">
       {needsSetup && (
         <div className="banner warn" role="alert">
-          JARVIS isn't set up yet. Run <code>jarvis setup</code> first, then talk.
+          Jardo isn't set up yet. Run <code>jardo setup</code> first, then talk.
         </div>
       )}
       {error && (
@@ -141,8 +141,8 @@ export function Voice() {
         </div>
       )}
       {reply && (
-        <div className="voice-line jarvis">
-          <span className="who">JARVIS</span>
+        <div className="voice-line jardo">
+          <span className="who">Jardo</span>
           <span>{reply}</span>
         </div>
       )}

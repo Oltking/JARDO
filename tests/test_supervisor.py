@@ -33,7 +33,7 @@ async def test_critical_bash_denied(session):
 
 
 async def test_policied_command_auto_allowed(session):
-    # Phase 4 demo criterion: JARVIS auto-answers per owner policy.
+    # Phase 4 demo criterion: Jardo auto-answers per owner policy.
     session.add(Policy(action_type="shell.run", target_pattern=r"npm test",
                        tier="always-allow"))
     await session.flush()

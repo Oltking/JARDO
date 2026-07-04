@@ -452,9 +452,9 @@ body {
   color: var(--muted);
   min-width: 54px;
 }
-.voice-line.jarvis {
+.voice-line.jardo {
   background: var(--panel-2);
 }
-.voice-line.jarvis .who {
+.voice-line.jardo .who {
   color: var(--accent);
 }

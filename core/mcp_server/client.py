@@ -1,4 +1,4 @@
-"""Thin MCP client helper (spec §4.3: JARVIS also acts as an MCP client to read
+"""Thin MCP client helper (spec §4.3: Jardo also acts as an MCP client to read
 other agents' plans / tool catalogs).
 
 Connects to an external MCP server over stdio and lists its tools, per

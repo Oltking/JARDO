@@ -1,6 +1,6 @@
 """Sentinel data model (spec §4.3 Action Review + §6 pipeline).
 
-Every action JARVIS or a supervised sub-agent wants to execute is described as
+Every action Jardo or a supervised sub-agent wants to execute is described as
 an ActionRequest and judged into an ActionReview. No direct execution paths
 (spec §0.3): executors must hold an approved review, never raw intent.
 """

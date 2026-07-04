@@ -1,9 +1,9 @@
 {
-  "name": "jarvis-desktop",
+  "name": "jardo-desktop",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "JARVIS desktop shell (Tauri v2) — Phase 5",
+  "description": "Jardo desktop shell (Tauri v2) — Phase 5",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

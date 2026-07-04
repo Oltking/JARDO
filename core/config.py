@@ -9,10 +9,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="JARVIS_")
+    model_config = SettingsConfigDict(env_prefix="JARDO_")
 
     # Local dev defaults match infra/docker-compose.yml (localhost-bound).
-    database_url: str = "postgresql+asyncpg://jarvis:jarvis-dev-only@127.0.0.1:5432/jarvis"
+    database_url: str = "postgresql+asyncpg://jardo:jardo-dev-only@127.0.0.1:5432/jardo"
     redis_url: str = "redis://127.0.0.1:6379/0"
 
     # Fireworks OpenAI-compatible endpoint.
