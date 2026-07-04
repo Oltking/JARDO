@@ -134,3 +134,17 @@ class AuditLog(Base):
     actor: Mapped[str] = mapped_column(String(64))  # "core", "worker", "cli", later: agent ids
     event_type: Mapped[str] = mapped_column(String(64), index=True)
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Report(Base):
+    """Generated reports (spec §4.4): stored and searchable, in-app inbox."""
+
+    __tablename__ = "reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    period: Mapped[str] = mapped_column(String(8), index=True)  # hourly | daily | weekly
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    body: Mapped[str] = mapped_column(Text)  # human-readable narrative
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)  # machine-readable roll-up
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, index=True)

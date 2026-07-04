@@ -9,6 +9,7 @@ import json
 import logging
 import uuid
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from core import secrets
@@ -16,6 +17,7 @@ from core.config import settings
 from core.db import SessionFactory
 from core.inference.fireworks import FireworksClient, FireworksError
 from core.memory import MemoryStore
+from core.reporter import generate_report
 
 logger = logging.getLogger("jarvis.worker")
 
@@ -67,7 +69,43 @@ async def extract_facts(ctx: dict, conversation_id: str) -> int:
         return stored
 
 
+async def _owner_honorific() -> str:
+    async with SessionFactory() as session:
+        owner = await MemoryStore(session).get_owner()
+        return owner.pronoun_style if owner else "sir"
+
+
+async def build_report(ctx: dict, period: str) -> str:
+    """Cron-driven report generation (spec §4.4)."""
+    honorific = await _owner_honorific()
+    async with SessionFactory() as session:
+        report = await generate_report(session, period, honorific=honorific)
+        await MemoryStore(session).audit("reporter", "report.generated",
+                                         {"period": period, "report_id": str(report.id)})
+        await session.commit()
+        logger.info("generated %s report %s", period, report.id)
+        return str(report.id)
+
+
+async def hourly_report(ctx: dict) -> str:
+    return await build_report(ctx, "hourly")
+
+
+async def daily_report(ctx: dict) -> str:
+    return await build_report(ctx, "daily")
+
+
+async def weekly_report(ctx: dict) -> str:
+    return await build_report(ctx, "weekly")
+
+
 class WorkerSettings:
-    functions = [extract_facts]
+    functions = [extract_facts, build_report]
+    # Report cadence (spec §4.4). Times are UTC.
+    cron_jobs = [
+        cron(hourly_report, minute=0),
+        cron(daily_report, hour=7, minute=5),          # morning summary
+        cron(weekly_report, weekday="mon", hour=7, minute=10),
+    ]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     max_jobs = 4

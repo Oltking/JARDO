@@ -204,6 +204,52 @@ def routes(limit: int = 20) -> None:
 
 
 @app.command()
+def report(period: str = "daily", show: bool = True) -> None:
+    """Generate and print an on-demand report (spec §4.4): hourly|daily|weekly."""
+    from core.db import SessionFactory
+    from core.memory import MemoryStore
+    from core.reporter import generate_report
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            owner = await MemoryStore(session).get_owner()
+            honorific = owner.pronoun_style if owner else "sir"
+            report_row = await generate_report(session, period, honorific=honorific)
+            await session.commit()
+            if show:
+                console.print(f"[bold]{report_row.body}[/bold]")
+
+    if period not in ("hourly", "daily", "weekly"):
+        console.print("[red]period must be hourly, daily, or weekly[/red]")
+        raise typer.Exit(1)
+    asyncio.run(_run())
+
+
+@app.command()
+def inbox(limit: int = 10) -> None:
+    """List stored reports (spec §4.4: reports are searchable)."""
+    from sqlalchemy import select
+    from core.db import SessionFactory
+    from core.schema import Report
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            rows = (await session.execute(
+                select(Report).order_by(Report.created_at.desc()).limit(limit)
+            )).scalars().all()
+            if not rows:
+                console.print("Inbox empty. Generate one: jarvis report --period daily")
+            for row in rows:
+                console.print(f"[dim]{row.created_at:%m-%d %H:%M}[/dim] "
+                              f"[bold]{row.period}[/bold] "
+                              f"— spent ${row.stats.get('spent_usd', 0):.4f}, "
+                              f"saved ${row.stats.get('saved_usd', 0):.4f}, "
+                              f"{row.stats.get('security_events', 0)} sec-events")
+
+    asyncio.run(_run())
+
+
+@app.command()
 def sentinel_demo() -> None:
     """Phase 3 demo (spec §9): a risky task is auto-flagged and blocked."""
     from core.db import SessionFactory
