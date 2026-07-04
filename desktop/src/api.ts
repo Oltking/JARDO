@@ -88,6 +88,51 @@ export async function getMemory(): Promise<MemoryItem[]> {
   return invoke<MemoryItem[]>("get_memory");
 }
 
+// ---- Voice (spec §8) ------------------------------------------------------
+
+export interface VoiceInputDevice {
+  index: number;
+  name: string;
+}
+
+export interface VoiceStatus {
+  available: boolean;
+  reason?: string;
+  tts_backend?: string;
+  tts_voice?: string;
+  input_devices?: VoiceInputDevice[];
+  selected_device?: number | null;
+}
+
+export interface TranscribeResult {
+  transcript: string;
+  amplitude: number;
+}
+
+export async function voiceStatus(): Promise<VoiceStatus> {
+  try {
+    return await invoke<VoiceStatus>("voice_status");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function voiceTranscribe(seconds: number): Promise<TranscribeResult> {
+  try {
+    return await invoke<TranscribeResult>("voice_transcribe", { seconds });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function voiceSay(text: string): Promise<void> {
+  try {
+    await invoke("voice_say", { text });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // Fires the kill-switch stub in Rust (logs + emits `kill-switch`). Real
 // synthetic-input halting lands in Phase 7 (spec §7.3).
 export async function killSwitch(source: string): Promise<void> {

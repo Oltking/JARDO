@@ -153,6 +153,75 @@ async def list_memory(session: AsyncSession = Depends(get_session)) -> list[dict
     ]
 
 
+# ---- Voice endpoints (spec §8) — drive the local mic/STT/TTS from the desktop UI.
+# Audio work is blocking + CPU-bound, so it runs in a threadpool off the event loop.
+# Voice deps are an optional extra; endpoints degrade gracefully if absent.
+
+class TranscribeRequest(BaseModel):
+    seconds: float = 5.0
+
+
+class SayRequest(BaseModel):
+    text: str
+
+
+def _voice_available() -> bool:
+    try:
+        import faster_whisper  # noqa: F401
+        import sounddevice  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@app.get("/voice/status")
+async def voice_status() -> dict:
+    if not _voice_available():
+        return {"available": False, "reason": "voice extra not installed "
+                "(uv sync --extra voice)"}
+    from core.voice import mic
+    from starlette.concurrency import run_in_threadpool
+    devices = await run_in_threadpool(mic.list_input_devices)
+    selected = await run_in_threadpool(mic.pick_builtin_mic)
+    return {
+        "available": True,
+        "tts_backend": settings.voice_tts_backend,
+        "tts_voice": settings.voice_tts_voice,
+        "input_devices": [{"index": i, "name": n} for i, n in devices],
+        "selected_device": selected,
+    }
+
+
+@app.post("/voice/transcribe")
+async def voice_transcribe(request: TranscribeRequest) -> dict:
+    if not _voice_available():
+        raise HTTPException(status_code=409, detail="voice extra not installed")
+    import numpy as np
+    from starlette.concurrency import run_in_threadpool
+    from core.voice import mic
+    from core.voice.stt import SpeechToText
+
+    if not hasattr(app.state, "stt"):
+        app.state.stt = SpeechToText("base")
+
+    audio = await run_in_threadpool(mic.record_seconds, request.seconds)
+    amplitude = float(np.abs(audio.astype(np.float32) / 32768.0).max())
+    transcript = await run_in_threadpool(app.state.stt.transcribe, audio)
+    return {"transcript": transcript, "amplitude": round(amplitude, 4)}
+
+
+@app.post("/voice/say")
+async def voice_say(request: SayRequest) -> dict:
+    if not _voice_available():
+        raise HTTPException(status_code=409, detail="voice extra not installed")
+    from starlette.concurrency import run_in_threadpool
+    from core.voice.tts import get_tts
+
+    tts = get_tts(settings.voice_tts_backend, voice=settings.voice_tts_voice)
+    await run_in_threadpool(tts.speak, request.text)
+    return {"spoken": True}
+
+
 class SuperviseRequest(BaseModel):
     actor: str = "claude-code"
     tool_name: str

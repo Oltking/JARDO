@@ -4,9 +4,10 @@ import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 import { StatusBar } from "./components/StatusBar";
 import { Chat } from "./components/Chat";
 import { Approvals } from "./components/Approvals";
+import { Voice } from "./components/Voice";
 import { killSwitch } from "./api";
 
-type Tab = "chat" | "approvals";
+type Tab = "chat" | "voice" | "approvals";
 
 // Global kill-switch hotkey (spec §7.3). Cmd+Shift+Escape on macOS.
 // docs/vendor/tauri/plugin-global-shortcut.md
@@ -77,6 +78,12 @@ export default function App() {
           Chat
         </button>
         <button
+          className={tab === "voice" ? "tab active" : "tab"}
+          onClick={() => setTab("voice")}
+        >
+          Voice
+        </button>
+        <button
           className={tab === "approvals" ? "tab active" : "tab"}
           onClick={() => setTab("approvals")}
         >
@@ -85,7 +92,9 @@ export default function App() {
       </nav>
 
       <main className="content">
-        {tab === "chat" ? <Chat /> : <Approvals />}
+        {tab === "chat" && <Chat />}
+        {tab === "voice" && <Voice />}
+        {tab === "approvals" && <Approvals />}
       </main>
     </div>
   );

@@ -127,6 +127,28 @@ struct DecideResult {
     status: String,
 }
 
+// Voice (spec §8). The core drives the local mic/STT/TTS; these just proxy.
+#[derive(Serialize)]
+struct SayRequest<'a> {
+    text: &'a str,
+}
+
+#[derive(Serialize)]
+struct TranscribeRequest {
+    seconds: f32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TranscribeResult {
+    transcript: String,
+    amplitude: f32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SayResult {
+    spoken: bool,
+}
+
 // ---------------------------------------------------------------------------
 // Tauri commands — the frontend calls these via `invoke(...)`.
 // ---------------------------------------------------------------------------
@@ -184,6 +206,45 @@ async fn decide_approval(id: String, approve: bool) -> Result<DecideResult, ApiE
     let resp = client()?
         .post(format!("{}/approvals/{}/decide", core_base(), id))
         .json(&DecideRequest { approve })
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Voice status (spec §8): deps available, mic devices, selected device, TTS
+/// backend. Returned as a flexible JSON value since the device list is nested.
+#[tauri::command]
+async fn voice_status() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/voice/status", core_base()))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Tap-to-talk: record `seconds` from the mic and transcribe locally (§8).
+#[tauri::command]
+async fn voice_transcribe(seconds: f32) -> Result<TranscribeResult, ApiError> {
+    let resp = client()?
+        .post(format!("{}/voice/transcribe", core_base()))
+        .json(&TranscribeRequest { seconds })
+        // STT + recording take a few seconds; give it generous headroom.
+        .timeout(std::time::Duration::from_secs(120))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Speak text in JARVIS's voice (§8).
+#[tauri::command]
+async fn voice_say(text: String) -> Result<SayResult, ApiError> {
+    let resp = client()?
+        .post(format!("{}/voice/say", core_base()))
+        .json(&SayRequest { text: &text })
+        .timeout(std::time::Duration::from_secs(60))
         .send()
         .await
         .map_err(ApiError::transport)?;
@@ -288,6 +349,9 @@ pub fn run() {
             get_memory,
             get_approvals,
             decide_approval,
+            voice_status,
+            voice_transcribe,
+            voice_say,
             kill_switch
         ])
         .run(tauri::generate_context!())
