@@ -1,0 +1,10 @@
+{"id": "rout-01", "prompt": "List the three primary colors, comma separated.", "expect_contains": ["red", "blue", "yellow"]}
+{"id": "rout-02", "prompt": "Write a one-sentence summary: 'The meeting moved from Tuesday to Thursday at 3pm because the client is travelling.' Include the new day and time.", "expect_contains": ["thursday", "3"]}
+{"id": "rout-03", "prompt": "Convert 2 hours 30 minutes to minutes. Include the number in your answer.", "expect_contains": ["150"]}
+{"id": "rout-04", "prompt": "Name the largest ocean on Earth.", "expect_contains": ["pacific"]}
+{"id": "rout-05", "prompt": "What is the past tense of 'go'? Answer in one word.", "expect_contains": ["went"]}
+{"id": "rout-06", "prompt": "Alphabetize: banana, apple, cherry. Comma separated.", "expect_contains": ["apple", "banana", "cherry"]}
+{"id": "rout-07", "prompt": "If a train leaves at 09:15 and arrives at 11:45, how long is the trip? Give hours and minutes.", "expect_contains": ["2", "30"]}
+{"id": "rout-08", "prompt": "Which is heavier: a kilogram of feathers or a kilogram of steel? Start your answer with 'Neither' or 'Same' or 'Equal'.", "expect_contains": ["e"]}
+{"id": "rout-09", "prompt": "Extract the email from: 'Contact me at dev@example.com tomorrow.'", "expect_contains": ["dev@example.com"]}
+{"id": "rout-10", "prompt": "What decade was the World Wide Web invented? Include the year 1989 or the word eighties.", "expect_contains": ["19"]}

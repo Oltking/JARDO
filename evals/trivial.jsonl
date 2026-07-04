@@ -1,0 +1,10 @@
+{"id": "triv-01", "prompt": "What is the capital of France? Answer in one word.", "expect_contains": ["paris"]}
+{"id": "triv-02", "prompt": "What is 7 times 8? Answer with just the number.", "expect_contains": ["56"]}
+{"id": "triv-03", "prompt": "Spell the word 'cat' backwards. Answer with just the letters.", "expect_contains": ["tac"]}
+{"id": "triv-04", "prompt": "Is the sun a star? Answer yes or no.", "expect_contains": ["yes"]}
+{"id": "triv-05", "prompt": "How many days are in a week? Answer with just the number.", "expect_contains": ["7"]}
+{"id": "triv-06", "prompt": "What color do you get mixing blue and yellow? One word.", "expect_contains": ["green"]}
+{"id": "triv-07", "prompt": "What is the chemical symbol for water?", "expect_contains": ["h2o"]}
+{"id": "triv-08", "prompt": "Which planet is known as the Red Planet? One word.", "expect_contains": ["mars"]}
+{"id": "triv-09", "prompt": "What is 100 divided by 4? Just the number.", "expect_contains": ["25"]}
+{"id": "triv-10", "prompt": "What language is spoken in Brazil? One word.", "expect_contains": ["portuguese"]}

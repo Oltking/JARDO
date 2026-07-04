@@ -1,0 +1,41 @@
+# JARVIS local dev infrastructure (Phase 1).
+# The same file is the basis for the VPS deployment at Phase 5 (QUESTIONS.md Q3).
+# Dev credentials below are localhost-bound only; production overrides them via
+# SOPS-encrypted env (SECURITY.md rule 3) — never commit real credentials here.
+name: jarvis
+
+services:
+  postgres:
+    # pgvector-enabled image: Phase 1 uses plain relational tables; Phase 2 adds
+    # the vector extension for memory embeddings without an image change.
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: jarvis-dev-only
+      POSTGRES_DB: jarvis
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis -d jarvis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
