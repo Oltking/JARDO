@@ -47,6 +47,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="JARVIS core", lifespan=lifespan)
 
+# Loopback-only in Phase 1; the Tauri desktop webview (tauri://, localhost dev
+# server) calls this API directly. Remote origins get nothing (mTLS arrives §5).
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(tauri://localhost|https?://localhost(:\d+)?|https?://127\.0\.0\.1(:\d+)?)$",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 async def _dispatch(decision: RouteDecision, messages: list[dict]):
     """Route a chat to the decided backend. vLLM speaks the OpenAI-compatible
@@ -94,6 +105,39 @@ async def healthz(session: AsyncSession = Depends(get_session)) -> dict:
     await session.execute(text("SELECT 1"))
     redis_ok = await app.state.arq.ping()
     return {"status": "ok", "db": "ok", "redis": "ok" if redis_ok else "down"}
+
+
+@app.get("/approvals")
+async def list_approvals(session: AsyncSession = Depends(get_session)) -> list[dict]:
+    """Pending escalations for the desktop Permission UI (spec §6.5)."""
+    from sqlalchemy import select
+    from core.schema import Approval
+
+    rows = (await session.execute(
+        select(Approval).where(Approval.status == "pending").order_by(Approval.created_at)
+    )).scalars().all()
+    return [
+        {"id": str(r.id), "actor": r.actor, "action_type": r.action_type,
+         "target": r.target, "stated_goal": r.stated_goal, "severity": r.severity,
+         "created_at": r.created_at.isoformat()}
+        for r in rows
+    ]
+
+
+class ApprovalDecision(BaseModel):
+    approve: bool
+
+
+@app.post("/approvals/{approval_id}/decide")
+async def decide_approval(approval_id: uuid.UUID, decision: ApprovalDecision,
+                          session: AsyncSession = Depends(get_session)) -> dict:
+    from core.sentinel.broker import decide_pending
+
+    result = await decide_pending(session, approval_id, decision.approve)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Not found or already decided")
+    await session.commit()
+    return {"id": str(result.id), "status": result.status}
 
 
 @app.get("/memory")

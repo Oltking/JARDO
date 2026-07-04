@@ -37,3 +37,4 @@ postgres-data/
 *.md
 docs/
 evals/scores.json
+.run/

@@ -239,6 +239,15 @@ def sentinel_demo() -> None:
     asyncio.run(_run())
 
 
+@app.command(name="mcp-server")
+def mcp_server() -> None:
+    """Phase 4 (spec §4.3): run the JARVIS MCP server (Agent Supervisor) over
+    stdio so other agents can call it for action approvals."""
+    from core.mcp_server.server import main
+
+    main()
+
+
 @app.command()
 def approvals(decide: str = "", approve: bool = True) -> None:
     """List pending approvals; --decide <id> --approve/--no-approve to rule."""
