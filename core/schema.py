@@ -107,6 +107,24 @@ class Approval(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class SupervisionSession(Base):
+    """An owner-declared oversight objective (spec §4.3 necessity test, §4.5
+    intent request). Before Jardo supervises a coding agent, the owner states
+    what they want to achieve; every agent action is then judged against this
+    objective. One active session per owner at a time (MVP)."""
+
+    __tablename__ = "supervision_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
+    objective: Mapped[str] = mapped_column(Text)     # what the owner wants achieved
+    agent: Mapped[str] = mapped_column(String(64), default="any")  # scope, e.g. claude-code
+    status: Mapped[str] = mapped_column(String(16), default="active", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+
+
 class RoutingLog(Base):
     """Every routing decision (spec §5.3): task_id, route, est/alt cost, saved_$."""
 

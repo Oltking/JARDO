@@ -59,7 +59,35 @@ def review_to_decision(review: ActionReview) -> dict:
 
 
 async def supervise_tool_call(session: AsyncSession, actor: str, tool_name: str,
-                              tool_input: dict, stated_goal: str = "") -> dict:
-    request = map_tool_call(actor, tool_name, tool_input, stated_goal)
+                              tool_input: dict, stated_goal: str = "",
+                              align_chat_fn=None) -> dict:
+    """Supervise one agent tool call. If an oversight objective is active
+    (core.supervision), the action is judged against the OWNER's objective, not
+    the agent's own claim — and an off-task action is escalated even if the
+    Sentinel would otherwise allow it (spec §4.3 necessity test)."""
+    from core.supervision import get_active, judge_alignment
+
+    session_objective = await get_active(session)
+    goal = session_objective.objective if session_objective else stated_goal
+    request = map_tool_call(actor, tool_name, tool_input, goal)
     review = await Sentinel(session).review(request)
+
+    if session_objective and review.verdict == Verdict.APPROVE:
+        # Objective-gating: only ever tightens an approve → escalate; never loosens.
+        alignment = await judge_alignment(
+            session_objective.objective, f"{request.action_type}: {request.target}",
+            chat_fn=align_chat_fn)
+        if not alignment.aligned:
+            decision = {
+                "permissionDecision": "ask",
+                "permissionDecisionReason": (
+                    f"Jardo: off-task for your objective "
+                    f"('{session_objective.objective[:80]}') — {alignment.reason}. "
+                    "Escalated for your confirmation."),
+            }
+            from core.memory import MemoryStore
+            await MemoryStore(session).audit("supervisor", "action.off_task", {
+                "objective": session_objective.objective[:200],
+                "action": request.target[:200], "judged_by": alignment.judged_by})
+            return decision
     return review_to_decision(review)

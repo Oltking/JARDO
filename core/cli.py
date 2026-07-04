@@ -501,6 +501,48 @@ def supervise_run(command: str, goal: str = "run a coding task") -> None:
 
 
 @app.command()
+def oversee(objective: str = typer.Argument(""), end: bool = False,
+            status: bool = False) -> None:
+    """Declare what you want to achieve, then Jardo supervises coding agents
+    against that objective (spec §4.3/§4.5). `--end` stops; `--status` shows it."""
+    import asyncio as _asyncio
+
+    from core.db import SessionFactory
+    from core.memory import MemoryStore
+    from core.supervision import end_active, get_active, start_session
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            owner = await MemoryStore(session).get_owner()
+            if owner is None:
+                console.print("[red]Not set up. Run: jardo setup[/red]"); raise typer.Exit(1)
+            if status:
+                active = await get_active(session, owner.id)
+                console.print(f"[bold]Supervising toward:[/bold] {active.objective}"
+                              if active else "No active supervision objective.")
+                return
+            if end:
+                n = await end_active(session, owner.id)
+                await session.commit()
+                console.print("Supervision ended." if n else "No active session.")
+                return
+            obj = objective.strip() or Prompt.ask(
+                "[bold]What do you want to achieve?[/bold] (Jardo will supervise agents "
+                "against this)")
+            if not obj.strip():
+                console.print("[yellow]No objective given — nothing to supervise.[/yellow]")
+                return
+            await start_session(session, owner.id, obj)
+            await session.commit()
+            console.print(f"[green]Now supervising toward:[/green] {obj}")
+            console.print("[dim]Run your coding agent (e.g. Claude Code). Jardo answers "
+                          "its permission prompts against this objective. "
+                          "Stop with: jardo oversee --end[/dim]")
+
+    _asyncio.run(_run())
+
+
+@app.command()
 def do(command: str, goal: str = "") -> None:
     """Autonomously run a coding command as a durable, supervised task (§4.2):
     Sentinel-gated, auto-answers prompts, checkpointed & crash-resumable."""

@@ -264,9 +264,18 @@ async def supervise(request: SuperviseRequest,
     Claude Code PreToolUse hook (mcp/claude-code/)."""
     from core.supervisor import supervise_tool_call
 
+    # Alignment judging uses the local model when available (supervision is a
+    # critical decision; upgrades to the quality tier once a Fireworks key exists).
+    async def _align(prompt: str) -> str:
+        local_model = RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b")
+        result = await app.state.ollama.chat(
+            local_model, [{"role": "user", "content": prompt}])
+        return result.content
+
+    chat_fn = _align if await app.state.ollama.is_up() else None
     decision = await supervise_tool_call(
         session, request.actor, request.tool_name, request.tool_input,
-        request.stated_goal,
+        request.stated_goal, align_chat_fn=chat_fn,
     )
     await session.commit()
     return {

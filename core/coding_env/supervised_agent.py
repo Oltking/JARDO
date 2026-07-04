@@ -45,11 +45,18 @@ class SupervisedAgent:
         })
         return token, review.verdict
 
+    async def _effective_goal(self, stated_goal: str) -> str:
+        """Prefer the owner's active oversight objective over the caller's goal."""
+        from core.supervision import get_active
+        active = await get_active(self._session)
+        return active.objective if active else stated_goal
+
     async def run(self, command: str, stated_goal: str, max_prompts: int = 50) -> dict:
         """Spawn `command` in a PTY and auto-answer its permission prompts.
         Returns a transcript + the list of decisions made."""
         import pexpect
 
+        goal = await self._effective_goal(stated_goal)
         child = pexpect.spawn("/bin/bash", ["-lc", command],
                               encoding="utf-8", timeout=self._timeout)
         decisions: list[dict] = []
@@ -65,7 +72,7 @@ class SupervisedAgent:
                 buffer += chunk
                 match = detect_prompt(buffer)
                 if match and len(decisions) < max_prompts:
-                    token, verdict = await self._answer(match, stated_goal)
+                    token, verdict = await self._answer(match, goal)
                     child.sendline(token)
                     decisions.append({
                         "prompt": match.prompt_line, "action": match.proposed_action,
