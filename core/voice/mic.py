@@ -12,10 +12,63 @@ SAMPLE_RATE = 16_000
 CHANNELS = 1
 FRAME_SAMPLES = 1280  # 80 ms at 16 kHz — openWakeWord's expected chunk
 
+# Selected input device (sounddevice index). None = auto-pick a built-in mic.
+_INPUT_DEVICE: int | None = None
+
+# Software gain applied to captured audio. Compensates for low input gain (e.g.
+# when a Bluetooth headset ducks the built-in mic). Clipped to int16 range.
+_INPUT_GAIN: float = 1.0
+
+
+def set_input_gain(gain: float) -> None:
+    global _INPUT_GAIN
+    _INPUT_GAIN = max(1.0, gain)
+
+
+def _apply_gain(audio):
+    if _INPUT_GAIN == 1.0:
+        return audio
+    import numpy as np
+    boosted = audio.astype(np.float32) * _INPUT_GAIN
+    return np.clip(boosted, -32768, 32767).astype(np.int16)
+
+# Bluetooth headsets expose a mic but only in hands-free (HFP) mode, which on
+# macOS often captures near-silence — prefer a wired/built-in mic over these.
+_BLUETOOTH_HINTS = ("airpods", "buds", "headset", "bluetooth", "wireless", "neo")
+_BUILTIN_HINTS = ("macbook", "built-in", "imac", "studio display", "internal")
+
 
 def _sd():
     import sounddevice  # lazy: heavy + needs PortAudio
     return sounddevice
+
+
+def list_input_devices() -> list[tuple[int, str]]:
+    sd = _sd()
+    return [(i, d["name"]) for i, d in enumerate(sd.query_devices())
+            if d["max_input_channels"] > 0]
+
+
+def pick_builtin_mic() -> int | None:
+    """Pick a sensible input device: a built-in mic if present, else the first
+    non-Bluetooth input, else the system default."""
+    devices = list_input_devices()
+    for idx, name in devices:
+        if any(h in name.lower() for h in _BUILTIN_HINTS):
+            return idx
+    for idx, name in devices:
+        if not any(h in name.lower() for h in _BLUETOOTH_HINTS):
+            return idx
+    return devices[0][0] if devices else None
+
+
+def set_input_device(index: int | None) -> None:
+    global _INPUT_DEVICE
+    _INPUT_DEVICE = index
+
+
+def _device() -> int | None:
+    return _INPUT_DEVICE if _INPUT_DEVICE is not None else pick_builtin_mic()
 
 
 def record_seconds(seconds: float):
@@ -23,21 +76,37 @@ def record_seconds(seconds: float):
     import numpy as np
     sd = _sd()
     frames = int(seconds * SAMPLE_RATE)
-    audio = sd.rec(frames, samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16")
+    audio = sd.rec(frames, samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
+                   device=_device())
     sd.wait()
-    return np.squeeze(audio)
+    return _apply_gain(np.squeeze(audio))
 
 
 def frame_stream(stop_event=None):
     """Yield successive int16 frames from the mic for wake-word streaming.
-    stop_event: optional threading.Event to end the stream."""
+    stop_event: optional threading.Event to end the stream.
+
+    Uses a callback-fed queue rather than InputStream.read(): the pull-read path
+    underflows to silence on macOS (observed max_amp≈0.0002 vs 0.999), so the
+    callback (push) model is the reliable streaming idiom here.
+    """
+    import queue
+
     import numpy as np
     sd = _sd()
+    frames: queue.Queue = queue.Queue()
+
+    def _callback(indata, frame_count, time_info, status):
+        frames.put(indata.copy())
+
     with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
-                        blocksize=FRAME_SAMPLES) as stream:
+                        blocksize=FRAME_SAMPLES, callback=_callback, device=_device()):
         while stop_event is None or not stop_event.is_set():
-            data, _ = stream.read(FRAME_SAMPLES)
-            yield np.squeeze(data)
+            try:
+                data = frames.get(timeout=1.0)
+            except queue.Empty:
+                continue
+            yield _apply_gain(np.squeeze(data))
 
 
 def request_mic_permission() -> bool:
