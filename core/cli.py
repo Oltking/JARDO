@@ -500,5 +500,43 @@ def supervise_run(command: str, goal: str = "run a coding task") -> None:
     _asyncio.run(_run())
 
 
+@app.command()
+def do(command: str, goal: str = "") -> None:
+    """Autonomously run a coding command as a durable, supervised task (§4.2):
+    Sentinel-gated, auto-answers prompts, checkpointed & crash-resumable."""
+    import asyncio as _asyncio
+    import json as _json
+
+    from core.coding_env.executor import build_coding_orchestrator
+    from core.db import SessionFactory
+    from core.memory import MemoryStore
+
+    async def _run() -> None:
+        orch = build_coding_orchestrator()
+        async with SessionFactory() as session:
+            owner = await MemoryStore(session).get_owner()
+            if owner is None:
+                console.print("[red]Not set up. Run: jardo setup[/red]"); raise typer.Exit(1)
+            task = await orch.enqueue(session, owner.id, "coding",
+                                      goal or command, spec={"command": command})
+            await session.commit()
+            done = await orch.run_task(session, task)
+            await session.commit()
+
+        console.print(f"[bold]task {done.state}[/bold] (attempts: {done.attempts})")
+        if done.state == "failed":
+            console.print(f"[red]{done.error}[/red]")
+            console.print("[dim]Tip: set a policy or approve, then retry.[/dim]")
+        elif done.result:
+            data = _json.loads(done.result)
+            for d in data.get("decisions", []):
+                console.print(f"  answered '{d['answered']}' → {d['action']} "
+                              f"[dim]({d['verdict']})[/dim]")
+            if data.get("output_tail", "").strip():
+                console.print(f"[dim]{data['output_tail'][-400:]}[/dim]")
+
+    _asyncio.run(_run())
+
+
 if __name__ == "__main__":
     app()

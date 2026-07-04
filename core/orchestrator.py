@@ -70,12 +70,14 @@ class Orchestrator:
             return VerifyResult(False, "empty goal")
         if task.kind not in self._executors:
             return VerifyResult(False, f"no executor for kind '{task.kind}'")
-        # Action tasks pass the Sentinel before execution — no direct paths (§0.3).
-        if task.kind == "action":
+        # Action + coding tasks pass the Sentinel before execution — no direct
+        # paths (§0.3). Coding tasks additionally gate interactive prompts at
+        # run time via SupervisedAgent, so this reviews the top-level command.
+        if task.kind in ("action", "coding"):
             request = ActionRequest(
                 actor="orchestrator",
                 action_type=task.spec.get("action_type", "shell.run"),
-                target=task.spec.get("target", ""),
+                target=task.spec.get("target") or task.spec.get("command", ""),
                 stated_goal=task.goal,
             )
             review = await Sentinel(session).review(request)
