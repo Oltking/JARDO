@@ -571,6 +571,39 @@ def oversee(objective: str = typer.Argument(""), end: bool = False,
 
 
 @app.command()
+def terminal(command: str, goal: str = "") -> None:
+    """Run a command in your REAL terminal, autonomously gated: Jardo checks
+    safety + purpose and acts on your behalf, refusing anything unsafe (§4.2/§8)."""
+    import asyncio as _asyncio
+
+    from core.autonomy.decider import autonomous_decision
+    from core.computer_use.real_terminal import RealTerminal
+    from core.db import SessionFactory
+    from core.supervision import get_active
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            active = await get_active(session)
+            objective = goal or (active.objective if active else "")
+
+            async def gate(cmd: str, g: str) -> tuple[bool, str]:
+                d = await autonomous_decision(session, cmd, objective)
+                return d.approve, d.reason
+
+            result = await RealTerminal(gate=gate).run(command, objective)
+            await session.commit()
+        if not result.approved:
+            console.print(f"[red]Refused:[/red] {result.reason}")
+        elif result.ran:
+            console.print(f"[green]Ran in your terminal[/green] "
+                          f"(exit {result.exit_status}) — {result.reason}")
+            if result.output:
+                console.print(f"[dim]{result.output[-600:]}[/dim]")
+
+    _asyncio.run(_run())
+
+
+@app.command()
 def do(command: str, goal: str = "") -> None:
     """Autonomously run a coding command as a durable, supervised task (§4.2):
     Sentinel-gated, auto-answers prompts, checkpointed & crash-resumable."""
