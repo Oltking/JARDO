@@ -46,12 +46,25 @@ def prepare_workspace(path: str | Path) -> Workspace:
     return Workspace(path=p, created=created, spec_file=spec_file, spec=spec)
 
 
-def compose_task(instruction: str, workspace: Workspace) -> str:
-    """Build the prompt handed to the agent: the owner's instruction plus any
-    project spec found in the folder."""
+# Cost-efficiency guidance handed to the agent (spec §5 — minimize token use
+# without sacrificing accuracy).
+_COST_DIRECTIVE = (
+    "\n\nWork cost-efficiently: read the project files and spec once and keep "
+    "that context in mind; plan before editing; make focused, correct changes "
+    "rather than broad rewrites; avoid re-reading files or re-running commands "
+    "you've already run; and stop once the goal is met. Accuracy first, then "
+    "the fewest tokens to get there.")
+
+
+def compose_task(instruction: str, workspace: Workspace,
+                 cost_directive: bool = True) -> str:
+    """Build the prompt handed to the agent: the owner's instruction, any project
+    spec found in the folder, and cost-efficiency guidance."""
     parts = [instruction.strip()]
     if workspace.spec:
         parts.append(
             f"\n\nThe project folder already contains {workspace.spec_file} with "
             f"this brief — follow it:\n\n{workspace.spec.strip()}")
+    if cost_directive:
+        parts.append(_COST_DIRECTIVE)
     return "".join(parts)

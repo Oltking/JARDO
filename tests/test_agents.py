@@ -30,7 +30,13 @@ def test_reads_project_spec(tmp_path):
 def test_no_spec_is_fine(tmp_path):
     ws = prepare_workspace(tmp_path)
     assert ws.spec is None
-    assert compose_task("just build it", ws) == "just build it"
+    assert compose_task("just build it", ws, cost_directive=False) == "just build it"
+
+
+def test_cost_directive_is_added(tmp_path):
+    ws = prepare_workspace(tmp_path)
+    task = compose_task("build a site", ws)
+    assert "cost-efficiently" in task and "build a site" in task
 
 
 # ---- adapters ------------------------------------------------------------
@@ -70,24 +76,37 @@ async def test_conduct_plan_only(session, tmp_path):
         assert "not installed" in result.note
 
 
-async def test_conduct_executes_fake_agent(session, tmp_path, monkeypatch):
+def test_model_is_cost_tiered_by_complexity():
+    a = get_adapter("claude")
+    from core.agents.runner import _pick_model
+    # short/simple → cheaper model; long/complex → stronger
+    assert _pick_model(a, "list files") == "haiku"
+    assert _pick_model(a, "x" * 500) == "sonnet"
+
+
+async def test_conduct_runs_visibly_and_captures(session, tmp_path, monkeypatch):
     await _owner(session)
-    # Point the claude adapter at a fake agent script that just echoes.
-    fake = tmp_path / "fake_agent.py"
-    fake.write_text("print('fake agent built the thing'); import sys; sys.exit(0)")
 
     class _Fake(ClaudeAdapter):
         def installed(self):
             return True
 
-        def build_command(self, prompt, resume=False):
-            return [sys.executable, str(fake)]
+        def build_shell_command(self, prompt_file, resume=False, model=None):
+            return "echo fake-agent-built-it"
 
-    import core.agents.runner as runner
-    monkeypatch.setitem(runner.__dict__, "get_adapter",
+    monkeypatch.setattr("core.agents.runner.get_adapter",
                         lambda k: _Fake("claude", "claude", "Claude Code", True, True))
 
+    # Stub the visible launcher so the test doesn't open a real terminal window.
+    from core.agents.terminal_launch import LaunchResult
+
+    async def fake_launch(command, cwd, timeout=900.0):
+        import subprocess
+        out = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True)
+        return LaunchResult(out.stdout, out.returncode, visible=True)
+
+    monkeypatch.setattr("core.agents.terminal_launch.launch_visible", fake_launch)
+
     result = await conduct(session, "build it", "claude", str(tmp_path), execute=True)
-    assert result.ok and result.executed
-    assert result.exit_status == 0
-    assert "fake agent built the thing" in result.output
+    assert result.ok and result.executed and result.visible
+    assert "fake-agent-built-it" in result.output

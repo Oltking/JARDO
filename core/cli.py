@@ -596,12 +596,16 @@ def build(instruction: str, agent: str = "claude", dir: str = ".",
         console.print(f"[bold]Project:[/bold] {ws['path']} "
                       f"({'created' if ws['created'] else 'existing'}"
                       f"{', spec: ' + ws['spec_file'] if ws.get('spec_file') else ''})")
-        console.print(f"[bold]Agent:[/bold] {result.agent}")
+        console.print(f"[bold]Agent:[/bold] {result.agent}"
+                      + (f"  ·  model: [cyan]{result.model}[/cyan] (cost-tiered)"
+                         if result.model else ""))
         console.print(f"[dim]command: {' '.join(result.command[:3])} …[/dim]")
         for w in result.warnings:
             console.print(f"[yellow]⚠ {w}[/yellow]")
         if result.executed:
-            console.print(f"[green]{result.note}[/green] (exit {result.exit_status})")
+            where = "visible terminal" if result.visible else "background"
+            console.print(f"[green]{result.note}[/green] (exit {result.exit_status}, "
+                          f"ran in {where})")
             if result.output:
                 console.print(f"[dim]{result.output[-800:]}[/dim]")
         else:

@@ -9,7 +9,7 @@ the app can show "here's what I'll do" and the owner can glance before it runs.
 Cross-platform: subprocess + pathlib, no OS-specific automation.
 """
 
-import subprocess
+import os
 from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,11 +24,31 @@ class AgentRun:
     agent: str
     workspace: dict
     command: list[str]
+    model: str | None = None
     executed: bool = False
+    visible: bool = False
     output: str = ""
     exit_status: int | None = None
     note: str = ""
     warnings: list[str] = field(default_factory=list)
+
+
+def _pick_model(adapter, instruction: str) -> str | None:
+    """Cost optimization (§5): choose a cheaper agent model for simpler tasks,
+    using the same deterministic classifier the router uses."""
+    tier_models = getattr(adapter, "MODEL_BY_TIER", {})
+    if not tier_models:
+        return None
+    from core.router.classifier import _CODE_HINT, _CRITICAL_PATTERNS
+    if _CRITICAL_PATTERNS.search(instruction):
+        tier = "critical"
+    elif _CODE_HINT.search(instruction) or len(instruction) > 400:
+        tier = "complex"
+    elif len(instruction) < 80:
+        tier = "trivial"
+    else:
+        tier = "routine"
+    return tier_models.get(tier)
 
 
 async def conduct(session: AsyncSession, instruction: str, agent_key: str,
@@ -44,7 +64,8 @@ async def conduct(session: AsyncSession, instruction: str, agent_key: str,
 
     workspace = prepare_workspace(project_dir)
     prompt = compose_task(instruction, workspace)
-    command = adapter.build_command(prompt, resume and adapter.supports_resume)
+    model = _pick_model(adapter, instruction)
+    command = adapter.build_command(prompt, resume and adapter.supports_resume, model)
 
     warnings: list[str] = []
     # Set the objective so the agent's actions are judged against this task
@@ -64,16 +85,26 @@ async def conduct(session: AsyncSession, instruction: str, agent_key: str,
                 "won't be auto-answered. Run: jardo hook install")
 
     if not execute:
-        return AgentRun(True, agent_key, workspace.as_dict(), command,
+        return AgentRun(True, agent_key, workspace.as_dict(), command, model=model,
                         note="planned (not run)", warnings=warnings)
 
+    # Write the prompt to a file (avoids quoting the spec) and run the agent in a
+    # VISIBLE terminal so the owner can watch it work.
+    import tempfile
+    from core.agents.terminal_launch import launch_visible
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False,
+                                     encoding="utf-8") as pf:
+        pf.write(prompt)
+        prompt_file = pf.name
+    shell_cmd = adapter.build_shell_command(
+        prompt_file, resume and adapter.supports_resume, model)
+    result = await launch_visible(shell_cmd, str(workspace.path), timeout)
     try:
-        proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True,
-                              text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return AgentRun(True, agent_key, workspace.as_dict(), command, executed=True,
-                        note=f"agent timed out after {timeout:.0f}s", warnings=warnings)
-    output = (proc.stdout or "") + (proc.stderr or "")
-    return AgentRun(True, agent_key, workspace.as_dict(), command, executed=True,
-                    output=output[-4000:], exit_status=proc.returncode,
-                    note="agent finished", warnings=warnings)
+        os.remove(prompt_file)
+    except OSError:
+        pass
+    return AgentRun(True, agent_key, workspace.as_dict(), command, model=model,
+                    executed=True, visible=result.visible, output=result.output,
+                    exit_status=result.exit_status, note="agent finished",
+                    warnings=warnings)

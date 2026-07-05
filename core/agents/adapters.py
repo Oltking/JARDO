@@ -25,27 +25,55 @@ class AgentAdapter:
     def installed(self) -> bool:
         return shutil.which(self.cli) is not None
 
-    def build_command(self, prompt: str, resume: bool = False) -> list[str]:
+    def build_command(self, prompt: str, resume: bool = False,
+                      model: str | None = None) -> list[str]:
+        raise NotImplementedError
+
+    def build_shell_command(self, prompt_file: str, resume: bool = False,
+                            model: str | None = None) -> str:
+        """Shell string that reads the prompt from a file (avoids quoting the
+        spec) — used for the visible-terminal run."""
         raise NotImplementedError
 
 
 class ClaudeAdapter(AgentAdapter):
-    def build_command(self, prompt: str, resume: bool = False) -> list[str]:
-        # Headless run; --continue resumes the most recent session in this folder.
-        # Permissions are answered by the Jardo PreToolUse hook (not skipped), so
-        # Jardo stays in control of safety+purpose.
-        argv = [self.cli, "-p", prompt, "--output-format", "stream-json", "--verbose"]
+    # Cost tiers (§5 applied to the coding agent): cheaper models for simple work.
+    MODEL_BY_TIER = {"trivial": "haiku", "routine": "sonnet",
+                     "complex": "sonnet", "critical": "opus"}
+
+    def build_command(self, prompt: str, resume: bool = False,
+                      model: str | None = None) -> list[str]:
+        # Permissions are answered by the Jardo hook (not skipped), so Jardo
+        # stays in control of safety + purpose.
+        argv = [self.cli, "-p", prompt]
+        if model:
+            argv += ["--model", model]
         if resume:
             argv.append("--continue")
         return argv
 
+    def build_shell_command(self, prompt_file: str, resume: bool = False,
+                            model: str | None = None) -> str:
+        import shlex
+        parts = [self.cli, "-p", f'"$(cat {shlex.quote(prompt_file)})"']
+        if model:
+            parts += ["--model", model]
+        if resume:
+            parts.append("--continue")
+        return " ".join(parts)
+
 
 class GeminiAdapter(AgentAdapter):
-    def build_command(self, prompt: str, resume: bool = False) -> list[str]:
-        # Gemini CLI: -p for a one-shot prompt. Resume flag added when confirmed
-        # against the installed version.
-        argv = [self.cli, "-p", prompt]
-        return argv
+    MODEL_BY_TIER: dict[str, str] = {}
+
+    def build_command(self, prompt: str, resume: bool = False,
+                      model: str | None = None) -> list[str]:
+        return [self.cli, "-p", prompt]
+
+    def build_shell_command(self, prompt_file: str, resume: bool = False,
+                            model: str | None = None) -> str:
+        import shlex
+        return f'{self.cli} -p "$(cat {shlex.quote(prompt_file)})"'
 
 
 ADAPTERS: dict[str, AgentAdapter] = {
