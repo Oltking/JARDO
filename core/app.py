@@ -266,6 +266,94 @@ async def voice_say(request: SayRequest) -> dict:
     return {"spoken": True}
 
 
+# ---- Conversational build front-door: Jardo interviews, then conducts the agent.
+
+class IntakeRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+
+
+async def _intake_chat_fn(session: AsyncSession):
+    """Cost-optimized model call for the intake conversation (local + cache)."""
+    from core.cache import cached_call
+    from core.router.router import RouterConfig
+
+    model = RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b")
+
+    async def chat_fn(messages: list[dict]) -> str:
+        async def miss() -> tuple[str, int]:
+            r = await app.state.ollama.chat(model, messages)
+            return r.content, (r.prompt_tokens or 0) + (r.completion_tokens or 0)
+        res = await cached_call(session, model, messages, miss)
+        return res.content
+
+    return chat_fn
+
+
+@app.post("/build/intake")
+async def build_intake(request: IntakeRequest,
+                       session: AsyncSession = Depends(get_session)) -> dict:
+    """One turn of the build interview. Returns Jardo's question/recommendation,
+    and when ready, the compiled brief + the agent to run."""
+    import uuid as _uuid
+
+    from core.agents.intake import intake_turn, parse_build_request
+
+    store = getattr(app.state, "build_intakes", None)
+    if store is None:
+        store = app.state.build_intakes = {}
+
+    if request.session_id and request.session_id in store:
+        sid = request.session_id
+        st = store[sid]
+    else:
+        what, agent = parse_build_request(request.message)
+        sid = _uuid.uuid4().hex[:12]
+        st = store[sid] = {"agent": agent, "what": what, "history": []}
+
+    chat_fn = await _intake_chat_fn(session)
+    turn = await intake_turn(st["agent"], st["history"], request.message, chat_fn)
+    st["history"].append({"role": "user", "content": request.message})
+    st["history"].append({"role": "assistant",
+                          "content": turn.brief or turn.reply})
+    if turn.ready:
+        st["brief"] = turn.brief
+    await session.commit()
+    return {"session_id": sid, "reply": turn.reply, "ready": turn.ready,
+            "brief": turn.brief, "agent": st["agent"], "what": st["what"]}
+
+
+class BuildRunRequest(BaseModel):
+    session_id: str
+    directory: str
+    run: bool = False
+
+
+@app.post("/build/run")
+async def build_run(request: BuildRunRequest,
+                    session: AsyncSession = Depends(get_session)) -> dict:
+    """Write the compiled brief into the project folder and conduct the agent."""
+    from pathlib import Path
+
+    from core.agents.runner import conduct
+
+    store = getattr(app.state, "build_intakes", {})
+    st = store.get(request.session_id)
+    if st is None or not st.get("brief"):
+        raise HTTPException(status_code=409, detail="No completed brief for this session")
+    folder = Path(request.directory).expanduser()
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SPEC.md").write_text(st["brief"], encoding="utf-8")
+
+    result = await conduct(session, st["what"], st["agent"], str(folder),
+                           execute=request.run)
+    await session.commit()
+    return {"agent": result.agent, "model": result.model, "executed": result.executed,
+            "visible": result.visible, "workspace": result.workspace,
+            "note": result.note, "warnings": result.warnings,
+            "output": result.output[-1500:] if result.output else ""}
+
+
 # ---- Reports inbox (spec §4.4): hourly/daily/weekly rollups.
 
 def _report_row(r) -> dict:

@@ -571,6 +571,45 @@ def oversee(objective: str = typer.Argument(""), end: bool = False,
 
 
 @app.command()
+def new(request: str = typer.Argument(""), dir: str = ".") -> None:
+    """Conversational front-door: say what you want to build; Jardo interviews you
+    (asking what it needs, recommending improvements), then runs the agent."""
+    import httpx as _httpx
+
+    console.print("[bold]Jardo[/bold] — tell me what you'd like to build "
+                  "(e.g. 'a bakery website with claude'). I'll ask what I need.")
+    message = request.strip() or console.input("[bold cyan]you ›[/bold cyan] ").strip()
+    session_id = None
+    agent = "claude"
+    while True:
+        try:
+            resp = _httpx.post(f"{_BASE}/build/intake",
+                               json={"message": message, "session_id": session_id},
+                               timeout=settings.request_timeout_seconds + 10)
+        except _httpx.ConnectError:
+            console.print(f"[red]Core not reachable at {_BASE}. Run: jardo serve[/red]")
+            raise typer.Exit(1)
+        data = resp.json()
+        session_id = data["session_id"]
+        agent = data["agent"]
+        console.print(f"[bold magenta]jardo ›[/bold magenta] {data['reply']}")
+        if data["ready"]:
+            console.print(f"\n[dim]Brief:[/dim]\n{data.get('brief', '')}\n")
+            if typer.confirm(f"Run {agent} on this in {dir}?", default=False):
+                run = _httpx.post(f"{_BASE}/build/run",
+                                  json={"session_id": session_id, "directory": dir,
+                                        "run": True},
+                                  timeout=1200).json()
+                console.print(f"[green]{run['note']}[/green]")
+                for w in run.get("warnings", []):
+                    console.print(f"[yellow]⚠ {w}[/yellow]")
+            return
+        message = console.input("[bold cyan]you ›[/bold cyan] ").strip()
+        if message in {"/quit", "/exit"}:
+            return
+
+
+@app.command()
 def build(instruction: str, agent: str = "claude", dir: str = ".",
           resume: bool = False, run: bool = False) -> None:
     """Conduct a coding agent to build something (§4.3): set up the project
