@@ -15,21 +15,35 @@ export function Briefing({ onDone }: { onDone: () => void }) {
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  const [confirmed, setConfirmed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const spokenRef = useRef(false);
 
   // Auto-listen for the day's goal (10s silence timeout). On hearing an answer,
-  // set it and proceed; on silence, leave the manual input available.
+  // Jardo confirms it out loud before proceeding; on silence/misheard, it says so
+  // and leaves the manual input available (never a silent jump).
   async function autoListenForGoal() {
     if (listening || busy) return;
     setListening(true);
     try {
       const heard = await voiceTranscribe(6);
-      if (heard.heard && heard.transcript.trim()) {
-        const g = heard.transcript.trim();
+      const g = (heard.transcript || "").trim();
+      if (heard.heard && g.length >= 3) {
         setGoal(g);
+        setConfirmed(g);
         await setObjective(g);
+        try {
+          await voiceSay(`Got it. I'll help you with ${g}. Let's get started.`);
+        } catch {
+          /* no voice — the visual confirmation still shows */
+        }
         onDone();
+      } else {
+        try {
+          await voiceSay("I didn't catch that. You can say it again, or type it below.");
+        } catch {
+          /* ignore */
+        }
       }
     } catch {
       /* ignore — manual input remains */
@@ -102,7 +116,13 @@ export function Briefing({ onDone }: { onDone: () => void }) {
               </div>
             )}
 
-            <label className="briefing-prompt">{data.prompt}</label>
+            {confirmed ? (
+              <div className="briefing-confirmed">✓ On it: <strong>{confirmed}</strong></div>
+            ) : (
+              <label className="briefing-prompt">
+                {listening ? "Listening — tell me your goal…" : data.prompt}
+              </label>
+            )}
             <div className="briefing-input">
               <button
                 className={`mic-btn ${listening ? "listening" : ""}`}

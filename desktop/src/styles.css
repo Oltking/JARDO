@@ -1053,3 +1053,14 @@ code {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Briefing — captured-goal confirmation */
+.briefing-confirmed {
+  font-size: 14px;
+  color: var(--ok);
+  margin-bottom: 10px;
+}
+.briefing-confirmed strong {
+  color: var(--text);
+  font-weight: 500;
+}
