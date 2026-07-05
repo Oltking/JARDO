@@ -6,6 +6,7 @@ import { Chat } from "./components/Chat";
 import { Approvals } from "./components/Approvals";
 import { Voice } from "./components/Voice";
 import { Agents } from "./components/Agents";
+import { Splash } from "./components/Splash";
 import { killSwitch } from "./api";
 
 type Tab = "chat" | "voice" | "agents" | "approvals";
@@ -58,6 +59,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <Splash />
       <StatusBar
         onKillSwitch={onKillClick}
         hotkeyLabel="⌘⇧⎋"
