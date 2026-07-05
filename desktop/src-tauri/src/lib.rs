@@ -142,6 +142,8 @@ struct TranscribeRequest {
 struct TranscribeResult {
     transcript: String,
     amplitude: f32,
+    #[serde(default)]
+    heard: bool,
 }
 
 #[derive(Serialize, Deserialize)]

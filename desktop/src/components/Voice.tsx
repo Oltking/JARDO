@@ -42,30 +42,37 @@ export function Voice() {
     if (runningRef.current) return;
     runningRef.current = true;
     setError(null);
-    setPhase(withWake ? "waking" : "listening");
     try {
       while (runningRef.current) {
         if (withWake) {
           setPhase("waking");
           const w = await voiceWake(30);
           if (!runningRef.current) break;
-          if (!w.detected) continue; // timeout → keep waiting
+          if (!w.detected) continue; // timeout → keep waiting for the wake word
+          setPhase("speaking");
+          await voiceSay("Yes?"); // acknowledge, then auto-listen
         }
-        setPhase("listening");
-        const heard = await voiceTranscribe(5);
-        if (!runningRef.current) break;
-        setAmplitude(heard.amplitude);
-        if (!heard.transcript.trim()) continue; // silence → listen again
-        setTranscript(heard.transcript);
-        setReply("");
-        setPhase("thinking");
-        const chat = await sendChat(heard.transcript, convRef.current);
-        convRef.current = chat.conversation_id;
-        setReply(chat.reply);
-        setNeedsSetup(false);
-        if (!runningRef.current) break;
-        setPhase("speaking");
-        await voiceSay(chat.reply);
+        // Conversation: auto-listen after each answer; end after 10s of silence.
+        while (runningRef.current) {
+          setPhase("listening");
+          const heard = await voiceTranscribe(6);
+          if (!runningRef.current) break;
+          setAmplitude(heard.amplitude);
+          if (!heard.heard) break; // 10s with no speech → end this conversation
+          if (!heard.transcript.trim()) continue; // noise but empty → listen again
+          setTranscript(heard.transcript);
+          setReply("");
+          setPhase("thinking");
+          const chat = await sendChat(heard.transcript, convRef.current);
+          convRef.current = chat.conversation_id;
+          setReply(chat.reply);
+          setNeedsSetup(false);
+          if (!runningRef.current) break;
+          setPhase("speaking");
+          await voiceSay(chat.reply);
+        }
+        // Tap-to-talk ends after silence; hands-free returns to waiting.
+        if (!withWake) break;
       }
     } catch (e) {
       const err = e as ApiError;

@@ -114,7 +114,9 @@ def record_until_silence(max_seconds: float = 15.0, silence_ms: float = 900,
                 break
     finally:
         gen.close()  # closes the InputStream promptly
-    if not frames:
+    # No speech within start_timeout → return empty so callers can detect a
+    # silence timeout (e.g. auto-listen ending after 10s of nothing).
+    if not started or not frames:
         return np.zeros(0, dtype="int16")
     return np.concatenate(frames)
 

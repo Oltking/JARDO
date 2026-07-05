@@ -18,30 +18,43 @@ export function Briefing({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const spokenRef = useRef(false);
 
-  async function speakGoal() {
+  // Auto-listen for the day's goal (10s silence timeout). On hearing an answer,
+  // set it and proceed; on silence, leave the manual input available.
+  async function autoListenForGoal() {
     if (listening || busy) return;
-    setError(null);
     setListening(true);
     try {
       const heard = await voiceTranscribe(6);
-      if (heard.transcript.trim()) setGoal(heard.transcript.trim());
-    } catch (e) {
-      setError((e as ApiError).message || "Couldn't hear you — check the mic.");
+      if (heard.heard && heard.transcript.trim()) {
+        const g = heard.transcript.trim();
+        setGoal(g);
+        await setObjective(g);
+        onDone();
+      }
+    } catch {
+      /* ignore — manual input remains */
     } finally {
       setListening(false);
     }
   }
 
+  const speakGoal = autoListenForGoal;
+
   useEffect(() => {
     getBriefing()
-      .then((b) => {
+      .then(async (b) => {
         setData(b);
-        if (!spokenRef.current) {
-          spokenRef.current = true;
-          voiceSay(b.spoken).catch(() => undefined); // speak greeting; ignore if no voice
+        if (spokenRef.current) return;
+        spokenRef.current = true;
+        try {
+          await voiceSay(b.spoken); // speak greeting + updates + the question
+        } catch {
+          /* no voice — fall through to manual */
         }
+        autoListenForGoal(); // then listen for the answer automatically
       })
       .catch((e: ApiError) => setError(e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit() {

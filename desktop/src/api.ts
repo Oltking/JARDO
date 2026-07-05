@@ -107,6 +107,7 @@ export interface VoiceStatus {
 export interface TranscribeResult {
   transcript: string;
   amplitude: number;
+  heard: boolean; // false = no speech within the listen timeout (silence)
 }
 
 export async function voiceStatus(): Promise<VoiceStatus> {

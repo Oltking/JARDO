@@ -161,6 +161,7 @@ class TranscribeRequest(BaseModel):
     seconds: float = 5.0          # legacy fixed-window seconds (used if auto_stop=false)
     auto_stop: bool = True        # end recording when the speaker stops (silence)
     max_seconds: float = 15.0     # hard cap for auto-stop
+    listen_timeout: float = 10.0  # wait this long for speech to start before giving up
 
 
 class SayRequest(BaseModel):
@@ -211,13 +212,17 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
         app.state.stt = SpeechToText(settings.voice_stt_model)
 
     if request.auto_stop:
-        audio = await run_in_threadpool(mic.record_until_silence, request.max_seconds)
+        audio = await run_in_threadpool(
+            mic.record_until_silence, request.max_seconds, 900, request.listen_timeout)
     else:
         audio = await run_in_threadpool(mic.record_seconds, request.seconds)
+    heard = bool(audio.size)
     amplitude = (float(np.abs(audio.astype(np.float32) / 32768.0).max())
-                 if audio.size else 0.0)
-    transcript = await run_in_threadpool(app.state.stt.transcribe, audio)
-    return {"transcript": transcript, "amplitude": round(amplitude, 4)}
+                 if heard else 0.0)
+    transcript = await run_in_threadpool(app.state.stt.transcribe, audio) if heard else ""
+    # heard=false means no speech within listen_timeout (silence) — callers use
+    # this to end an auto-listen session.
+    return {"transcript": transcript, "amplitude": round(amplitude, 4), "heard": heard}
 
 
 class WakeRequest(BaseModel):
