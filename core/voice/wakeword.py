@@ -62,17 +62,24 @@ import re
 # single canonical word FUZZILY (edit-distance-ish via difflib) rather than
 # maintaining a brittle list. "jarvis"/"javis" kept as transitional aliases.
 _WAKE_WORD = "jardo"
-_ALIAS_WORDS = frozenset({"jarvis", "javis"})
-_FUZZY_RATIO = 0.72  # SequenceMatcher ratio; catches jardu/jarda/jordo/yardo/…
+_ALIAS_WORDS = frozenset({"jarvis", "javis", "jado", "jadu", "jaru", "jardu"})
+_FUZZY_RATIO = 0.6  # lower bar for j-initial tokens (see below)
 _SILENCE_GATE = 0.02  # skip transcribing windows quieter than this
+
+# whisper often MERGES "hey Jardo" into one token ("ejado", "eyjardo",
+# "heyjardu"), so we also scan the whole utterance (letters only, no spaces) for
+# these embedded jardo-forms. All are non-words → negligible false positives.
+_SUBSTRING_MARKERS = ("jardo", "jardu", "jado", "jadu", "jaru", "jarvis", "javis")
 
 
 def _word_is_wake(word: str) -> bool:
     if word in _ALIAS_WORDS or word == _WAKE_WORD:
         return True
-    # Fuzzy: close to "jardo" and roughly the same length (avoid matching short
-    # unrelated words like "hard" or "car").
-    if abs(len(word) - len(_WAKE_WORD)) <= 1:
+    # "Jardo" is a novel word Whisper renders inconsistently (jadu/jado/jardu/…).
+    # Require the same initial 'j' and similar length, then a lenient fuzzy match.
+    # Keying on the 'j' rejects real look-alikes ("hard", "card") that would
+    # otherwise pass a low ratio.
+    if word[:1] == "j" and abs(len(word) - len(_WAKE_WORD)) <= 1:
         return difflib.SequenceMatcher(None, word, _WAKE_WORD).ratio() >= _FUZZY_RATIO
     return False
 
@@ -85,8 +92,13 @@ class WhisperWakeDetector:
         self._silence_gate = silence_gate
 
     def _matches(self, transcript: str) -> bool:
-        # Tokenize and fuzzy-match each word against the wake word.
-        return any(_word_is_wake(w) for w in re.findall(r"[a-z]+", transcript.lower()))
+        lowered = transcript.lower()
+        # 1. Merged/embedded form: scan the spaceless letter string for a marker.
+        compact = re.sub(r"[^a-z]", "", lowered)
+        if any(marker in compact for marker in _SUBSTRING_MARKERS):
+            return True
+        # 2. Word-level fuzzy match (handles a cleanly-separated "jardo").
+        return any(_word_is_wake(w) for w in re.findall(r"[a-z]+", lowered))
 
     def listen(self, timeout_seconds: float = 30.0) -> bool:
         """Block until the wake word is heard or timeout. Returns True on wake."""
