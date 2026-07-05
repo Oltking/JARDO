@@ -3,13 +3,15 @@
 Source: docs/vendor/voice/faster-whisper-readme.md
   from faster_whisper import WhisperModel
   model = WhisperModel(size, device="cpu", compute_type="int8")
-  segments, info = model.transcribe(audio, beam_size=5)   # segments is a generator
+  segments, info = model.transcribe(audio, beam_size=5, vad_filter=True)
 
-Model default "base" (~140 MB, good accuracy on Apple Silicon CPU). Lazy-loaded
-and cached so the first transcription pays the load cost, not import.
+Default model "small.en": markedly more accurate than "base" on real speech,
+still fast on Apple Silicon CPU. Lazy-loaded and cached. vad_filter drops
+non-speech audio (built-in Silero VAD), which is the main cure for whisper
+hallucinating "nonsense" on quiet/short clips.
 """
 
-DEFAULT_MODEL = "base"
+DEFAULT_MODEL = "small.en"
 
 
 class SpeechToText:
@@ -37,6 +39,9 @@ class SpeechToText:
             audio = audio.astype(np.float32) / 32768.0  # whisper wants float32 in [-1,1]
         segments, _info = model.transcribe(
             audio, beam_size=5, language=self._language,
-            condition_on_previous_text=False,  # further reduces hallucination
+            condition_on_previous_text=False,  # reduce hallucination
+            # Silero VAD: skip non-speech so silence isn't transcribed as garbage.
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 400},
         )
         return " ".join(segment.text.strip() for segment in segments).strip()

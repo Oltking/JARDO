@@ -21,7 +21,7 @@ class TTSUnavailable(RuntimeError):
 
 
 class MacSayTTS:
-    def __init__(self, voice: str = "Samantha", rate_wpm: int = 180):
+    def __init__(self, voice: str = "Samantha", rate_wpm: int = 174):
         if shutil.which("say") is None:
             raise TTSUnavailable("macOS `say` not found (macOS-first backend)")
         self._voice = voice
@@ -37,31 +37,34 @@ class MacSayTTS:
 
 
 class PiperTTS:
-    """Piper neural TTS. Requires a downloaded voice (.onnx + .onnx.json) and the
-    piper binary/package. Source: docs/vendor/voice/piper-cli.md."""
+    """Piper neural TTS via the Python API (natural prosody, local, offline).
+    Requires a downloaded voice (.onnx + .onnx.json). Source: docs/vendor/voice/
+    piper-api-python.md. The voice is loaded once and reused."""
 
-    def __init__(self, model_path: str, piper_bin: str = "piper"):
-        if shutil.which(piper_bin) is None:
-            raise TTSUnavailable(f"piper binary '{piper_bin}' not found")
-        self._model = model_path
-        self._bin = piper_bin
+    def __init__(self, model_path: str):
+        from pathlib import Path
+        if not Path(model_path).exists():
+            raise TTSUnavailable(f"piper voice not found: {model_path}")
+        from piper import PiperVoice
+        self._voice = PiperVoice.load(model_path)
+
+    def synthesize_to_wav(self, text: str, path: str) -> str:
+        import wave
+        with wave.open(path, "wb") as wf:
+            self._voice.synthesize_wav(text, wf)
+        return path
 
     def speak(self, text: str) -> None:
         wav = "/tmp/jardo_piper.wav"
         self.synthesize_to_wav(text, wav)
         subprocess.run(["afplay", wav], check=False)
 
-    def synthesize_to_wav(self, text: str, path: str) -> str:
-        # piper reads text on stdin, writes wav to --output_file (piper-cli.md).
-        subprocess.run([self._bin, "--model", self._model, "--output_file", path],
-                       input=text.encode(), check=False)
-        return path
 
-
-def get_tts(backend: str = "say", **kwargs):
-    if backend == "piper":
+def get_tts(backend: str = "say", *, voice: str = "Samantha", rate_wpm: int = 174,
+            model_path: str | None = None):
+    if backend == "piper" and model_path:
         try:
-            return PiperTTS(**kwargs)
-        except TTSUnavailable:
-            pass  # fall back to say
-    return MacSayTTS(**{k: v for k, v in kwargs.items() if k in ("voice", "rate_wpm")})
+            return PiperTTS(model_path)
+        except Exception:  # noqa: BLE001 — any load failure falls back to `say`
+            pass
+    return MacSayTTS(voice=voice, rate_wpm=rate_wpm)

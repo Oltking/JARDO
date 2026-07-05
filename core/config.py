@@ -5,6 +5,8 @@ macOS Keychain via core.secrets (SECURITY.md rule 3). Everything below is safe
 to appear in a process listing.
 """
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,8 +37,12 @@ class Settings(BaseSettings):
 
     # Voice (spec §8) — fully optional.
     voice_enabled: bool = False
-    voice_tts_backend: str = "say"  # "say" (macOS, default) | "piper"
-    voice_tts_voice: str = "Samantha"
+    voice_tts_backend: str = "piper"  # "piper" (neural, natural) | "say" (macOS)
+    voice_tts_voice: str = "Samantha"  # used only by the `say` backend
+    voice_piper_model: str = str(
+        Path.home() / ".local/share/jardo/piper/en_US-hfc_female-medium.onnx"
+    )
+    voice_stt_model: str = "small.en"  # faster-whisper model (accuracy vs. speed)
 
 
 settings = Settings()

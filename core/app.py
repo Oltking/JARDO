@@ -183,10 +183,14 @@ async def voice_status() -> dict:
     from starlette.concurrency import run_in_threadpool
     devices = await run_in_threadpool(mic.list_input_devices)
     selected = await run_in_threadpool(mic.pick_builtin_mic)
+    voice_label = (
+        "Piper (neural)" if settings.voice_tts_backend == "piper"
+        else settings.voice_tts_voice
+    )
     return {
         "available": True,
         "tts_backend": settings.voice_tts_backend,
-        "tts_voice": settings.voice_tts_voice,
+        "tts_voice": voice_label,
         "input_devices": [{"index": i, "name": n} for i, n in devices],
         "selected_device": selected,
     }
@@ -202,7 +206,7 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
     from core.voice.stt import SpeechToText
 
     if not hasattr(app.state, "stt"):
-        app.state.stt = SpeechToText("base")
+        app.state.stt = SpeechToText(settings.voice_stt_model)
 
     audio = await run_in_threadpool(mic.record_seconds, request.seconds)
     amplitude = float(np.abs(audio.astype(np.float32) / 32768.0).max())
@@ -225,7 +229,7 @@ async def voice_wake(request: WakeRequest) -> dict:
     from core.voice.wakeword import WhisperWakeDetector
 
     if not hasattr(app.state, "stt"):
-        app.state.stt = SpeechToText("base")
+        app.state.stt = SpeechToText(settings.voice_stt_model)
     detector = WhisperWakeDetector(app.state.stt)
     detected = await run_in_threadpool(detector.listen, request.timeout)
     return {"detected": detected}
@@ -238,7 +242,8 @@ async def voice_say(request: SayRequest) -> dict:
     from starlette.concurrency import run_in_threadpool
     from core.voice.tts import get_tts
 
-    tts = get_tts(settings.voice_tts_backend, voice=settings.voice_tts_voice)
+    tts = get_tts(settings.voice_tts_backend, voice=settings.voice_tts_voice,
+                  model_path=settings.voice_piper_model)
     await run_in_threadpool(tts.speak, request.text)
     return {"spoken": True}
 
