@@ -7,6 +7,7 @@ import { Approvals } from "./components/Approvals";
 import { Voice } from "./components/Voice";
 import { Agents } from "./components/Agents";
 import { Splash } from "./components/Splash";
+import { Briefing } from "./components/Briefing";
 import { killSwitch } from "./api";
 
 type Tab = "chat" | "voice" | "agents" | "approvals";
@@ -18,6 +19,7 @@ const KILL_SWITCH_HOTKEY = "CommandOrControl+Shift+Escape";
 export default function App() {
   const [tab, setTab] = useState<Tab>("chat");
   const [killFlash, setKillFlash] = useState(false);
+  const [briefingDone, setBriefingDone] = useState(false);
 
   // Visual acknowledgement whenever the kill-switch fires, from any source
   // (tray menu, global hotkey, or the header button). The Rust side emits a
@@ -60,6 +62,7 @@ export default function App() {
   return (
     <div className="app">
       <Splash />
+      {!briefingDone && <Briefing onDone={() => setBriefingDone(true)} />}
       <StatusBar
         onKillSwitch={onKillClick}
         hotkeyLabel="⌘⇧⎋"

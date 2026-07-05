@@ -813,3 +813,122 @@ code {
   width: 14px;
   height: 14px;
 }
+
+/* ---------- Launch briefing ---------- */
+.briefing {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  animation: fade-in 0.5s ease both;
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.briefing-card {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.briefing-logo {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  margin-bottom: 14px;
+}
+.briefing-greeting {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin: 0 0 16px;
+}
+.briefing-updates {
+  list-style: none;
+  margin: 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+}
+.briefing-updates li {
+  font-size: 13px;
+  color: var(--dim);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+}
+.briefing-active {
+  font-size: 12.5px;
+  color: var(--dim);
+  margin-bottom: 16px;
+}
+.briefing-active strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.briefing-prompt {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+.briefing-input {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.briefing-input input {
+  flex: 1;
+  background: var(--elev);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.briefing-input input:focus {
+  border-color: #34333b;
+}
+.briefing-input input::placeholder {
+  color: var(--faint);
+}
+.briefing-input button {
+  background: var(--text);
+  color: #131217;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 18px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.briefing-input button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.briefing-skip {
+  margin-top: 16px;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.briefing-skip:hover {
+  color: var(--dim);
+}

@@ -212,6 +212,29 @@ async fn decide_approval(id: String, approve: bool) -> Result<DecideResult, ApiE
     parse_json(resp).await
 }
 
+/// Launch briefing: greeting + updates + the day's-objective prompt (§4.5).
+#[tauri::command]
+async fn briefing() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/briefing", core_base()))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Set the day's objective; Jardo supervises agents against it (§4.3).
+#[tauri::command]
+async fn set_objective(objective: String) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/supervision", core_base()))
+        .json(&serde_json::json!({ "objective": objective }))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
 /// Detected coding environments (editors/terminals/shells/agents) for the
 /// Agents tab. Flexible JSON — the shape is a nested inventory.
 #[tauri::command]
@@ -389,6 +412,8 @@ pub fn run() {
             voice_transcribe,
             voice_wake,
             voice_say,
+            briefing,
+            set_objective,
             coding_tools,
             coding_decisions,
             kill_switch

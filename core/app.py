@@ -248,6 +248,55 @@ async def voice_say(request: SayRequest) -> dict:
     return {"spoken": True}
 
 
+# ---- Launch briefing + daily objective (spec §4.5).
+
+@app.get("/briefing")
+async def briefing(session: AsyncSession = Depends(get_session)) -> dict:
+    """Greeting + updates + the day's-objective prompt, shown on app launch."""
+    from core.briefing import assemble_briefing
+    return await assemble_briefing(session)
+
+
+class ObjectiveRequest(BaseModel):
+    objective: str
+
+
+@app.get("/supervision")
+async def supervision_status(session: AsyncSession = Depends(get_session)) -> dict:
+    from core.supervision import get_active
+    active = await get_active(session)
+    return {"objective": active.objective if active else None}
+
+
+@app.post("/supervision")
+async def supervision_start(request: ObjectiveRequest,
+                            session: AsyncSession = Depends(get_session)) -> dict:
+    """Set the day's objective; Jardo supervises agents against it (spec §4.3)."""
+    from core.memory import MemoryStore
+    from core.supervision import start_session
+
+    owner = await MemoryStore(session).get_owner()
+    if owner is None:
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
+    if not request.objective.strip():
+        raise HTTPException(status_code=400, detail="Objective is empty")
+    await start_session(session, owner.id, request.objective.strip())
+    await session.commit()
+    return {"objective": request.objective.strip()}
+
+
+@app.delete("/supervision")
+async def supervision_end(session: AsyncSession = Depends(get_session)) -> dict:
+    from core.memory import MemoryStore
+    from core.supervision import end_active
+
+    owner = await MemoryStore(session).get_owner()
+    if owner is not None:
+        await end_active(session, owner.id)
+        await session.commit()
+    return {"ended": True}
+
+
 # ---- Coding-environment surface (owner scope) — for the desktop Agents tab.
 
 @app.get("/coding/tools")

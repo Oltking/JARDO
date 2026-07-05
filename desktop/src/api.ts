@@ -141,6 +141,32 @@ export async function voiceWake(timeout: number): Promise<{ detected: boolean }>
   }
 }
 
+export interface Briefing {
+  greeting: string;
+  updates: string[];
+  has_updates: boolean;
+  active_objective: string | null;
+  prompt: string;
+  spoken: string;
+  owner: boolean;
+}
+
+export async function getBriefing(): Promise<Briefing> {
+  try {
+    return await invoke<Briefing>("briefing");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function setObjective(objective: string): Promise<void> {
+  try {
+    await invoke("set_objective", { objective });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Coding environments + agent decisions (Agents tab) -------------------
 
 export interface CodingInventory {
