@@ -571,6 +571,46 @@ def oversee(objective: str = typer.Argument(""), end: bool = False,
 
 
 @app.command()
+def build(instruction: str, agent: str = "claude", dir: str = ".",
+          resume: bool = False, run: bool = False) -> None:
+    """Conduct a coding agent to build something (§4.3): set up the project
+    folder, read its spec, launch the agent with the task, and auto-answer its
+    prompts. Shows the plan by default; pass --run to actually launch the agent."""
+    import asyncio as _asyncio
+
+    from core.agents.adapters import installed_agents
+    from core.agents.runner import conduct
+    from core.db import SessionFactory
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            result = await conduct(session, instruction, agent, dir,
+                                   resume=resume, execute=run)
+        if not result.ok:
+            console.print(f"[red]{result.note}[/red]")
+            avail = installed_agents()
+            if avail:
+                console.print(f"[dim]installed agents: {', '.join(avail.values())}[/dim]")
+            raise typer.Exit(1)
+        ws = result.workspace
+        console.print(f"[bold]Project:[/bold] {ws['path']} "
+                      f"({'created' if ws['created'] else 'existing'}"
+                      f"{', spec: ' + ws['spec_file'] if ws.get('spec_file') else ''})")
+        console.print(f"[bold]Agent:[/bold] {result.agent}")
+        console.print(f"[dim]command: {' '.join(result.command[:3])} …[/dim]")
+        for w in result.warnings:
+            console.print(f"[yellow]⚠ {w}[/yellow]")
+        if result.executed:
+            console.print(f"[green]{result.note}[/green] (exit {result.exit_status})")
+            if result.output:
+                console.print(f"[dim]{result.output[-800:]}[/dim]")
+        else:
+            console.print("[dim]Plan only. Re-run with --run to launch the agent.[/dim]")
+
+    _asyncio.run(_run())
+
+
+@app.command()
 def terminal(command: str, goal: str = "") -> None:
     """Run a command in your REAL terminal, autonomously gated: Jardo checks
     safety + purpose and acts on your behalf, refusing anything unsafe (§4.2/§8)."""
