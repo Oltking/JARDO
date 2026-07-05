@@ -932,3 +932,57 @@ code {
 .briefing-skip:hover {
   color: var(--dim);
 }
+
+/* Briefing — voice answer button */
+.mic-btn {
+  background: var(--elev);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.mic-btn:hover:not(:disabled) {
+  border-color: #34333b;
+}
+.mic-btn.listening {
+  color: var(--bad);
+  border-color: var(--bad);
+  box-shadow: 0 0 0 4px rgba(226, 140, 140, 0.08);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.mic-btn:disabled {
+  cursor: default;
+}
+
+/* Voice-first composer */
+.voice-composer {
+  align-items: center;
+  gap: 10px;
+}
+.mic-btn.big {
+  flex: 1;
+  padding: 14px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+.mode-toggle {
+  background: transparent;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.mode-toggle:hover {
+  color: var(--text);
+  border-color: #34333b;
+}

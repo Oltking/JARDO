@@ -3,6 +3,7 @@ import {
   getBriefing,
   setObjective,
   voiceSay,
+  voiceTranscribe,
   type ApiError,
   type Briefing as BriefingData,
 } from "../api";
@@ -13,8 +14,23 @@ export function Briefing({ onDone }: { onDone: () => void }) {
   const [data, setData] = useState<BriefingData | null>(null);
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const spokenRef = useRef(false);
+
+  async function speakGoal() {
+    if (listening || busy) return;
+    setError(null);
+    setListening(true);
+    try {
+      const heard = await voiceTranscribe(6);
+      if (heard.transcript.trim()) setGoal(heard.transcript.trim());
+    } catch (e) {
+      setError((e as ApiError).message || "Couldn't hear you — check the mic.");
+    } finally {
+      setListening(false);
+    }
+  }
 
   useEffect(() => {
     getBriefing()
@@ -75,14 +91,22 @@ export function Briefing({ onDone }: { onDone: () => void }) {
 
             <label className="briefing-prompt">{data.prompt}</label>
             <div className="briefing-input">
+              <button
+                className={`mic-btn ${listening ? "listening" : ""}`}
+                onClick={speakGoal}
+                disabled={listening || busy}
+                title="Answer by voice"
+              >
+                {listening ? "● Listening…" : "🎤 Speak"}
+              </button>
               <input
                 autoFocus
                 value={goal}
-                placeholder="e.g. add a login page to the web app…"
+                placeholder="…or type your goal for today"
                 onChange={(e) => setGoal(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()}
               />
-              <button onClick={submit} disabled={busy}>
+              <button onClick={submit} disabled={busy || listening}>
                 {goal.trim() ? "Set goal" : "Skip"}
               </button>
             </div>
