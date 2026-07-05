@@ -55,23 +55,38 @@ class WakeWordDetector:
 # reuses the proven STT path — capture short windows, skip silence, transcribe,
 # and trigger when the wake word appears. Heavier on CPU than a dedicated wake
 # model, fine for a single-user MVP.
-# Brand wake word is "Jardo" (BRANDING.md). whisper mishears it various ways;
-# match generously. "hey jarvis"/"javis" kept as transitional aliases.
-_WAKE_PHRASES = ("jardo", "hey jardo", "jardu", "jarda", "jar do", "hey jarvis", "javis")
+import difflib
+import re
+
+# The brand wake word (BRANDING.md). whisper mishears it many ways, so match a
+# single canonical word FUZZILY (edit-distance-ish via difflib) rather than
+# maintaining a brittle list. "jarvis"/"javis" kept as transitional aliases.
+_WAKE_WORD = "jardo"
+_ALIAS_WORDS = frozenset({"jarvis", "javis"})
+_FUZZY_RATIO = 0.72  # SequenceMatcher ratio; catches jardu/jarda/jordo/yardo/…
 _SILENCE_GATE = 0.02  # skip transcribing windows quieter than this
 
 
+def _word_is_wake(word: str) -> bool:
+    if word in _ALIAS_WORDS or word == _WAKE_WORD:
+        return True
+    # Fuzzy: close to "jardo" and roughly the same length (avoid matching short
+    # unrelated words like "hard" or "car").
+    if abs(len(word) - len(_WAKE_WORD)) <= 1:
+        return difflib.SequenceMatcher(None, word, _WAKE_WORD).ratio() >= _FUZZY_RATIO
+    return False
+
+
 class WhisperWakeDetector:
-    def __init__(self, stt, phrases: tuple[str, ...] = _WAKE_PHRASES,
-                 window_seconds: float = 2.0, silence_gate: float = _SILENCE_GATE):
+    def __init__(self, stt, window_seconds: float = 2.0,
+                 silence_gate: float = _SILENCE_GATE):
         self._stt = stt
-        self._phrases = tuple(p.lower() for p in phrases)
         self._window = window_seconds
         self._silence_gate = silence_gate
 
     def _matches(self, transcript: str) -> bool:
-        t = transcript.lower()
-        return any(p in t for p in self._phrases)
+        # Tokenize and fuzzy-match each word against the wake word.
+        return any(_word_is_wake(w) for w in re.findall(r"[a-z]+", transcript.lower()))
 
     def listen(self, timeout_seconds: float = 30.0) -> bool:
         """Block until the wake word is heard or timeout. Returns True on wake."""
