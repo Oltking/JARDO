@@ -133,6 +133,14 @@ export async function voiceSay(text: string): Promise<void> {
   }
 }
 
+export async function voiceWake(timeout: number): Promise<{ detected: boolean }> {
+  try {
+    return await invoke<{ detected: boolean }>("voice_wake", { timeout });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Coding environments + agent decisions (Agents tab) -------------------
 
 export interface CodingInventory {

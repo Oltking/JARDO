@@ -261,6 +261,19 @@ async fn voice_transcribe(seconds: f32) -> Result<TranscribeResult, ApiError> {
     parse_json(resp).await
 }
 
+/// Block until the wake word ("hey Jardo") is heard or timeout (§8).
+#[tauri::command]
+async fn voice_wake(timeout: f32) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/voice/wake", core_base()))
+        .json(&serde_json::json!({ "timeout": timeout }))
+        .timeout(std::time::Duration::from_secs((timeout as u64) + 15))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
 /// Speak text in Jardo's voice (§8).
 #[tauri::command]
 async fn voice_say(text: String) -> Result<SayResult, ApiError> {
@@ -374,6 +387,7 @@ pub fn run() {
             decide_approval,
             voice_status,
             voice_transcribe,
+            voice_wake,
             voice_say,
             coding_tools,
             coding_decisions,

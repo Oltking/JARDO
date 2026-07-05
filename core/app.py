@@ -210,6 +210,27 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
     return {"transcript": transcript, "amplitude": round(amplitude, 4)}
 
 
+class WakeRequest(BaseModel):
+    timeout: float = 30.0
+
+
+@app.post("/voice/wake")
+async def voice_wake(request: WakeRequest) -> dict:
+    """Block until the wake word ('hey Jardo') is heard or timeout (spec §8).
+    Used by the desktop hands-free mode. Reuses the STT-based detector."""
+    if not _voice_available():
+        raise HTTPException(status_code=409, detail="voice extra not installed")
+    from starlette.concurrency import run_in_threadpool
+    from core.voice.stt import SpeechToText
+    from core.voice.wakeword import WhisperWakeDetector
+
+    if not hasattr(app.state, "stt"):
+        app.state.stt = SpeechToText("base")
+    detector = WhisperWakeDetector(app.state.stt)
+    detected = await run_in_threadpool(detector.listen, request.timeout)
+    return {"detected": detected}
+
+
 @app.post("/voice/say")
 async def voice_say(request: SayRequest) -> dict:
     if not _voice_available():

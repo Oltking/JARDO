@@ -1,75 +1,102 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   sendChat,
   voiceSay,
   voiceStatus,
   voiceTranscribe,
+  voiceWake,
   type ApiError,
   type VoiceStatus,
 } from "../api";
 
-// Voice panel (spec §8). Tap-to-talk: record → local STT → /chat → speak reply.
-// Shows a capture-amplitude meter because a quiet signal (e.g. a Bluetooth
-// headset ducking the built-in mic) is the usual reason transcription fails.
-type Phase = "idle" | "listening" | "thinking" | "speaking";
+// Voice panel (spec §8). A continuous conversation: once started it keeps
+// listening → answering → listening until you stop it, so you can ask follow-up
+// questions without tapping again. Optional hands-free mode waits for the wake
+// word ("hey Jardo") before each turn. An amplitude meter surfaces mic trouble.
+type Phase = "idle" | "waking" | "listening" | "thinking" | "speaking";
 
-const LOW_SIGNAL = 0.02; // below this, capture is effectively silence
-const CLIPPING = 0.98; // at/above this the mic is clipping — lower input volume
+const LOW_SIGNAL = 0.02;
+const CLIPPING = 0.98;
 
 export function Voice() {
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
+  const [handsFree, setHandsFree] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [amplitude, setAmplitude] = useState<number | null>(null);
   const [reply, setReply] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
-  const [convId, setConvId] = useState<string | null>(null);
+
+  const runningRef = useRef(false);
+  const convRef = useRef<string | null>(null);
 
   useEffect(() => {
-    voiceStatus()
-      .then(setStatus)
-      .catch((e: ApiError) => setError(e.message));
+    voiceStatus().then(setStatus).catch((e: ApiError) => setError(e.message));
+    return () => {
+      runningRef.current = false; // stop the loop if the tab unmounts
+    };
   }, []);
 
-  async function talk() {
-    if (phase !== "idle") return;
+  async function loop(withWake: boolean) {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setError(null);
-    setTranscript("");
-    setReply("");
-    setAmplitude(null);
-    setPhase("listening");
+    setPhase(withWake ? "waking" : "listening");
     try {
-      const heard = await voiceTranscribe(5);
-      setTranscript(heard.transcript);
-      setAmplitude(heard.amplitude);
-      if (!heard.transcript.trim()) {
-        setPhase("idle");
-        return;
+      while (runningRef.current) {
+        if (withWake) {
+          setPhase("waking");
+          const w = await voiceWake(30);
+          if (!runningRef.current) break;
+          if (!w.detected) continue; // timeout → keep waiting
+        }
+        setPhase("listening");
+        const heard = await voiceTranscribe(5);
+        if (!runningRef.current) break;
+        setAmplitude(heard.amplitude);
+        if (!heard.transcript.trim()) continue; // silence → listen again
+        setTranscript(heard.transcript);
+        setReply("");
+        setPhase("thinking");
+        const chat = await sendChat(heard.transcript, convRef.current);
+        convRef.current = chat.conversation_id;
+        setReply(chat.reply);
+        setNeedsSetup(false);
+        if (!runningRef.current) break;
+        setPhase("speaking");
+        await voiceSay(chat.reply);
       }
-      setPhase("thinking");
-      const chat = await sendChat(heard.transcript, convId);
-      setConvId(chat.conversation_id);
-      setReply(chat.reply);
-      setNeedsSetup(false);
-      setPhase("speaking");
-      await voiceSay(chat.reply);
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 409) {
-        // Could be voice-not-installed or chat-not-set-up; both surface here.
-        if ((err.message || "").includes("voice")) setError(err.message);
-        else setNeedsSetup(true);
+      if (err.status === 409 && !(err.message || "").includes("voice")) {
+        setNeedsSetup(true);
       } else {
-        setError(err.message || "Voice request failed.");
+        setError(err.message || "Voice error.");
       }
+      runningRef.current = false;
     } finally {
       setPhase("idle");
     }
   }
 
-  const selectedName =
-    status?.input_devices?.find((d) => d.index === status.selected_device)?.name;
+  function stop() {
+    runningRef.current = false;
+    setPhase("idle");
+  }
+
+  const active = phase !== "idle";
+  const buttonLabel: Record<Phase, string> = {
+    idle: handsFree ? "🎙 Start hands-free" : "🎙 Tap to talk",
+    waking: "Say “hey Jardo”…",
+    listening: "● Listening…",
+    thinking: "… Thinking",
+    speaking: "🔊 Speaking",
+  };
+
+  const selectedName = status?.input_devices?.find(
+    (d) => d.index === status.selected_device
+  )?.name;
 
   if (status && !status.available) {
     return (
@@ -103,20 +130,31 @@ export function Voice() {
             <strong>{status?.tts_voice}</strong>
           </span>
         ) : (
-          <span>Checking voice status…</span>
+          <span>Checking voice…</span>
         )}
       </div>
 
       <button
         className={`talk-button ${phase}`}
-        onClick={talk}
-        disabled={phase !== "idle"}
+        onClick={() => (active ? stop() : loop(handsFree))}
       >
-        {phase === "idle" && "🎙 Tap to talk"}
-        {phase === "listening" && "● Listening…"}
-        {phase === "thinking" && "… Thinking"}
-        {phase === "speaking" && "🔊 Speaking"}
+        {buttonLabel[phase]}
       </button>
+
+      {active ? (
+        <button className="ghost voice-stop" onClick={stop}>
+          Stop
+        </button>
+      ) : (
+        <label className="handsfree-toggle">
+          <input
+            type="checkbox"
+            checked={handsFree}
+            onChange={(e) => setHandsFree(e.target.checked)}
+          />
+          Hands-free — wait for “hey Jardo” each turn
+        </label>
+      )}
 
       {amplitude !== null && (
         <div className="amp-meter">
@@ -128,8 +166,7 @@ export function Voice() {
             signal {amplitude.toFixed(3)}
             {amplitude < LOW_SIGNAL &&
               " — very quiet; raise input volume or disconnect Bluetooth audio"}
-            {amplitude >= CLIPPING &&
-              " — clipping; lower mic input volume in System Settings"}
+            {amplitude >= CLIPPING && " — clipping; lower mic input volume"}
           </span>
         </div>
       )}
@@ -147,10 +184,11 @@ export function Voice() {
         </div>
       )}
 
-      {!transcript && !reply && phase === "idle" && (
+      {!transcript && !reply && !active && (
         <div className="empty">
-          Tap the button and speak. Your voice is transcribed locally
-          (faster-whisper), answered by the routed model, and spoken back.
+          Start a conversation — Jardo keeps listening after each answer, so you can
+          ask follow-ups without tapping again. Turn on hands-free to wake it with
+          “hey Jardo”.
         </div>
       )}
     </div>
