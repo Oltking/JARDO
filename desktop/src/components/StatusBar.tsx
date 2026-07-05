@@ -43,16 +43,7 @@ export function StatusBar({ onKillSwitch, hotkeyLabel, killFlash }: Props) {
   return (
     <header className="statusbar">
       <div className="brand" title="Jardo">
-        {/* Minimal "A" mark echoing the halftone logo */}
-        <svg className="mark" viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M12 4 L4.5 20 M12 4 L19.5 20 M7.6 14.5 L16.4 14.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          />
-        </svg>
+        <img className="mark" src="/jardo-logo.png" alt="Jardo" />
         <span className="title">Jardo</span>
       </div>
 

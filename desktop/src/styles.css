@@ -91,10 +91,12 @@ body {
   gap: 9px;
 }
 .mark {
-  width: 22px;
-  height: 22px;
-  color: var(--text);
-  opacity: 0.95;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  /* logo art is a white halftone "A" on black — screen blend drops the black
+     so the mark sits seamlessly on the dark header */
+  mix-blend-mode: screen;
 }
 .title {
   font-weight: 600;
@@ -241,6 +243,32 @@ code {
   font-size: 12.5px;
   line-height: 1.7;
   padding: 40px 20px;
+}
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.welcome-logo {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  margin-bottom: 10px;
+  opacity: 0.96;
+}
+.welcome-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--text);
+}
+.welcome-sub {
+  margin: 4px 0 0;
+  color: var(--faint);
+  font-size: 12.5px;
 }
 
 /* ---------- Chat ---------- */

@@ -90,9 +90,10 @@ export function Chat() {
 
       <div className="messages" ref={scrollRef}>
         {messages.length === 0 && (
-          <div className="empty">
-            Ask Jardo anything. Messages POST to <code>/chat</code> and thread by
-            conversation id.
+          <div className="empty welcome">
+            <img className="welcome-logo" src="/jardo-logo.png" alt="Jardo" />
+            <p className="welcome-title">Jardo</p>
+            <p className="welcome-sub">Your AI chief of staff. Ask anything.</p>
           </div>
         )}
         {messages.map((m, i) => (
