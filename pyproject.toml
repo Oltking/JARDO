@@ -32,6 +32,7 @@ dev = [
 [project.scripts]
 jardo = "core.cli:app"
 jardo-mcp = "core.mcp_server.server:main"
+jardo-hook = "core.coding_env.pretooluse_hook:main"
 
 [project.optional-dependencies]
 voice = [

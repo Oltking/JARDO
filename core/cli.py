@@ -501,6 +501,34 @@ def supervise_run(command: str, goal: str = "run a coding task") -> None:
 
 
 @app.command()
+def hook(action: str = typer.Argument("status")) -> None:
+    """Install/uninstall/status the Claude Code supervision hook (install|uninstall|
+    status). User-agnostic — merges into ~/.claude/settings.json, no hardcoded paths."""
+    from core.coding_env import hook_install
+
+    if action == "install":
+        result = hook_install.install()
+        console.print(f"[green]Hook installed[/green] → {result['settings_path']}")
+        console.print(f"  command: [dim]{result['hook_command']}[/dim]")
+        console.print(f"  matcher: {result['matcher']}")
+        if result["backup"]:
+            console.print(f"  [dim]backup: {result['backup']}[/dim]")
+        console.print("\n[yellow]Note:[/yellow] with the Jardo core running "
+                      "([bold]jardo serve[/bold]) and an objective set "
+                      "([bold]jardo oversee[/bold]), Claude Code's tool prompts are now "
+                      "answered by Jardo per policy. Restart Claude Code to load the hook.")
+    elif action == "uninstall":
+        result = hook_install.uninstall()
+        console.print(f"[green]Removed {result['removed']} Jardo hook(s)[/green] "
+                      f"from {result['settings_path']}")
+    else:
+        s = hook_install.status()
+        console.print(f"Hook installed: [bold]{s['installed']}[/bold]")
+        console.print(f"  settings: {s['settings_path']}")
+        console.print(f"  command:  [dim]{s['hook_command']}[/dim]")
+
+
+@app.command()
 def oversee(objective: str = typer.Argument(""), end: bool = False,
             status: bool = False) -> None:
     """Declare what you want to achieve, then Jardo supervises coding agents
