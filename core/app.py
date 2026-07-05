@@ -158,7 +158,9 @@ async def list_memory(session: AsyncSession = Depends(get_session)) -> list[dict
 # Voice deps are an optional extra; endpoints degrade gracefully if absent.
 
 class TranscribeRequest(BaseModel):
-    seconds: float = 5.0
+    seconds: float = 5.0          # legacy fixed-window seconds (used if auto_stop=false)
+    auto_stop: bool = True        # end recording when the speaker stops (silence)
+    max_seconds: float = 15.0     # hard cap for auto-stop
 
 
 class SayRequest(BaseModel):
@@ -208,8 +210,12 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
     if not hasattr(app.state, "stt"):
         app.state.stt = SpeechToText(settings.voice_stt_model)
 
-    audio = await run_in_threadpool(mic.record_seconds, request.seconds)
-    amplitude = float(np.abs(audio.astype(np.float32) / 32768.0).max())
+    if request.auto_stop:
+        audio = await run_in_threadpool(mic.record_until_silence, request.max_seconds)
+    else:
+        audio = await run_in_threadpool(mic.record_seconds, request.seconds)
+    amplitude = (float(np.abs(audio.astype(np.float32) / 32768.0).max())
+                 if audio.size else 0.0)
     transcript = await run_in_threadpool(app.state.stt.transcribe, audio)
     return {"transcript": transcript, "amplitude": round(amplitude, 4)}
 
