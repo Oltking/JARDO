@@ -107,6 +107,25 @@ class Approval(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
 
+class ResponseCache(Base):
+    """Response cache (spec §5 cost optimization): never pay for the same model
+    call twice. Keyed by a hash of (model, messages); a hit returns the stored
+    answer at zero token cost. tokens_saved accumulates what caching avoided."""
+
+    __tablename__ = "response_cache"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cache_key: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    model: Mapped[str] = mapped_column(String(120))
+    request_preview: Mapped[str] = mapped_column(String(300))
+    response: Mapped[str] = mapped_column(Text)
+    per_call_tokens: Mapped[int] = mapped_column(Integer, default=0)  # tokens one call costs
+    hits: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_hit_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+
+
 class SupervisionSession(Base):
     """An owner-declared oversight objective (spec §4.3 necessity test, §4.5
     intent request). Before Jardo supervises a coding agent, the owner states

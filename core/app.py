@@ -100,6 +100,13 @@ class ChatResponse(BaseModel):
     completion_tokens: int | None
 
 
+@app.get("/cache/stats")
+async def cache_statistics(session: AsyncSession = Depends(get_session)) -> dict:
+    """Cost-optimization cache stats: entries, hits, and tokens saved (§5)."""
+    from core.cache import cache_stats
+    return await cache_stats(session)
+
+
 @app.get("/healthz")
 async def healthz(session: AsyncSession = Depends(get_session)) -> dict:
     await session.execute(text("SELECT 1"))
@@ -439,32 +446,61 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     except BudgetExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
+    # Cost optimization (§5): serve from the response cache when we've answered
+    # this exact request before — zero tokens, and free on the paid tiers.
+    from core.cache import cached_call
+
+    dispatched: dict = {}
+
+    async def _miss() -> tuple[str, int]:
+        r = await _dispatch(decision, messages)
+        dispatched["model"] = r.model
+        dispatched["prompt_tokens"] = r.prompt_tokens
+        dispatched["completion_tokens"] = r.completion_tokens
+        return r.content, (r.prompt_tokens or 0) + (r.completion_tokens or 0)
+
     try:
-        result = await _dispatch(decision, messages)
+        cached = await cached_call(session, decision.model, messages, _miss)
     except (FireworksError, OllamaUnavailable) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
+    if cached.cached:
+        reply_model = f"{decision.model} (cached)"
+        prompt_tokens = completion_tokens = 0
+    else:
+        reply_model = dispatched.get("model", decision.model)
+        prompt_tokens = dispatched.get("prompt_tokens")
+        completion_tokens = dispatched.get("completion_tokens")
+
+    class _R:
+        content = cached.content
+    result = _R()
+
     await log_decision(
         session, decision, task_id=str(conversation.id),
-        actual_cost_usd=None if decision.backend != "fireworks" else decision.est_cost_usd,
+        actual_cost_usd=(0.0 if cached.cached
+                         else (None if decision.backend != "fireworks"
+                               else decision.est_cost_usd)),
     )
 
     await store.add_message(
         conversation.id,
         "assistant",
         result.content,
-        model=result.model,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
+        model=reply_model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
     await store.audit(
         "core",
         "chat.completion",
         {
             "conversation_id": str(conversation.id),
-            "model": result.model,
-            "prompt_tokens": result.prompt_tokens,
-            "completion_tokens": result.completion_tokens,
+            "model": reply_model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "cached": cached.cached,
+            "tokens_saved": cached.tokens_saved,
         },
     )
     await session.commit()
@@ -475,7 +511,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     return ChatResponse(
         reply=result.content,
         conversation_id=conversation.id,
-        model=result.model,
-        prompt_tokens=result.prompt_tokens,
-        completion_tokens=result.completion_tokens,
+        model=reply_model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
     )
