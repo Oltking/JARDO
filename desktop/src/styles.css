@@ -986,3 +986,70 @@ code {
   color: var(--text);
   border-color: #34333b;
 }
+
+/* ---------- Reports ---------- */
+.reports {
+  padding: 18px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.reports-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.reports-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+.report-actions {
+  display: flex;
+  gap: 6px;
+}
+.report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.report-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.report-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.report-period {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--elev-2);
+}
+.report-period.daily { color: var(--ok); background: rgba(116, 207, 160, 0.08); }
+.report-period.weekly { color: var(--warn); background: rgba(224, 180, 115, 0.08); }
+.report-date {
+  font-size: 11px;
+  color: var(--faint);
+}
+.report-body {
+  margin: 0;
+  padding: 14px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--dim);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

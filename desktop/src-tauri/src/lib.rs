@@ -212,6 +212,29 @@ async fn decide_approval(id: String, approve: bool) -> Result<DecideResult, ApiE
     parse_json(resp).await
 }
 
+/// Reports inbox: recent hourly/daily/weekly rollups (§4.4).
+#[tauri::command]
+async fn list_reports() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/reports", core_base()))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Generate a fresh report for a period (hourly|daily|weekly).
+#[tauri::command]
+async fn generate_report(period: String) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/reports/generate", core_base()))
+        .json(&serde_json::json!({ "period": period }))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
 /// Launch briefing: greeting + updates + the day's-objective prompt (§4.5).
 #[tauri::command]
 async fn briefing() -> Result<serde_json::Value, ApiError> {
@@ -414,6 +437,8 @@ pub fn run() {
             voice_say,
             briefing,
             set_objective,
+            list_reports,
+            generate_report,
             coding_tools,
             coding_decisions,
             kill_switch

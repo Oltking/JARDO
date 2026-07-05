@@ -167,6 +167,26 @@ export async function setObjective(objective: string): Promise<void> {
   }
 }
 
+export interface Report {
+  id: string;
+  period: string;
+  body: string;
+  stats: Record<string, number | string>;
+  created_at: string;
+}
+
+export async function listReports(): Promise<Report[]> {
+  return invoke<Report[]>("list_reports");
+}
+
+export async function generateReport(period: string): Promise<Report> {
+  try {
+    return await invoke<Report>("generate_report", { period });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Coding environments + agent decisions (Agents tab) -------------------
 
 export interface CodingInventory {

@@ -254,6 +254,44 @@ async def voice_say(request: SayRequest) -> dict:
     return {"spoken": True}
 
 
+# ---- Reports inbox (spec §4.4): hourly/daily/weekly rollups.
+
+def _report_row(r) -> dict:
+    return {"id": str(r.id), "period": r.period, "body": r.body,
+            "stats": r.stats, "created_at": r.created_at.isoformat()}
+
+
+@app.get("/reports")
+async def list_reports(session: AsyncSession = Depends(get_session),
+                       limit: int = 30) -> list[dict]:
+    from sqlalchemy import select
+    from core.schema import Report
+
+    rows = (await session.execute(
+        select(Report).order_by(Report.created_at.desc()).limit(limit)
+    )).scalars().all()
+    return [_report_row(r) for r in rows]
+
+
+class GenerateReportRequest(BaseModel):
+    period: str = "daily"
+
+
+@app.post("/reports/generate")
+async def generate_report_now(request: GenerateReportRequest,
+                              session: AsyncSession = Depends(get_session)) -> dict:
+    from core.memory import MemoryStore
+    from core.reporter import generate_report
+
+    if request.period not in ("hourly", "daily", "weekly"):
+        raise HTTPException(status_code=400, detail="period must be hourly, daily, or weekly")
+    owner = await MemoryStore(session).get_owner()
+    honorific = owner.pronoun_style if owner else "sir"
+    report = await generate_report(session, request.period, honorific=honorific)
+    await session.commit()
+    return _report_row(report)
+
+
 # ---- Launch briefing + daily objective (spec §4.5).
 
 @app.get("/briefing")
