@@ -15,10 +15,22 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.embeddings import embed, to_pgvector
 from core.schema import ResponseCache
+
+# Cosine-distance threshold for a semantic hit (0 = identical). Conservative so
+# we only reuse genuinely equivalent prior answers.
+_SEMANTIC_THRESHOLD = 0.12
+
+
+def _query_text(messages: list[dict]) -> str:
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            return " ".join(str(m.get("content", "")).split())
+    return ""
 
 
 def cache_key(model: str, messages: list[dict]) -> str:
@@ -64,23 +76,59 @@ async def put_cached(session: AsyncSession, model: str, messages: list[dict],
     session.add(ResponseCache(cache_key=key, model=model, request_preview=preview,
                               response=response, per_call_tokens=per_call_tokens, hits=0))
     await session.flush()
+    # Store the query embedding for semantic reuse (no-op if no embedding model).
+    vec = await embed(_query_text(messages))
+    if vec:
+        await session.execute(
+            text("UPDATE response_cache SET embedding = :v WHERE cache_key = :k"),
+            {"v": to_pgvector(vec), "k": key})
+
+
+async def semantic_get(session: AsyncSession, model: str,
+                       messages: list[dict]) -> tuple[str, int] | None:
+    """Find a cached answer to a *similar* prior query (same model) via pgvector.
+    Returns (response, tokens_saved) or None. Skipped if no embedding model."""
+    query = _query_text(messages)
+    if not query:
+        return None
+    vec = await embed(query)
+    if not vec:
+        return None
+    row = (await session.execute(
+        text("SELECT id, response, per_call_tokens, "
+             "(embedding <=> :v) AS dist FROM response_cache "
+             "WHERE model = :m AND embedding IS NOT NULL "
+             "ORDER BY dist ASC LIMIT 1"),
+        {"v": to_pgvector(vec), "m": model})).first()
+    if row and row.dist is not None and row.dist <= _SEMANTIC_THRESHOLD:
+        await session.execute(
+            text("UPDATE response_cache SET hits = hits + 1, last_hit_at = now() "
+                 "WHERE id = :id"), {"id": row.id})
+        return row.response, row.per_call_tokens
+    return None
 
 
 async def cached_call(session: AsyncSession, model: str, messages: list[dict],
                       miss_fn: Callable[[], Awaitable[tuple[str, int]]]) -> CachedResult:
     """Return a cached response if present, else call miss_fn() -> (text, tokens)
     and store it. Zero tokens on a hit."""
+    # 1. Exact hit.
     hit = await get_cached(session, model, messages)
     if hit is not None:
-        # tokens this call would have cost = the stored per_call_tokens
         key = cache_key(model, messages)
         row = (await session.execute(
             select(ResponseCache).where(ResponseCache.cache_key == key)
         )).scalar_one()
         return CachedResult(hit, True, row.per_call_tokens)
-    text, tokens = await miss_fn()
-    await put_cached(session, model, messages, text, tokens)
-    return CachedResult(text, False, 0)
+    # 2. Semantic hit — a similar prior question (pgvector).
+    sem = await semantic_get(session, model, messages)
+    if sem is not None:
+        response, tokens_saved = sem
+        return CachedResult(response, True, tokens_saved)
+    # 3. Miss — run the real call and store it (with its embedding).
+    response, tokens = await miss_fn()
+    await put_cached(session, model, messages, response, tokens)
+    return CachedResult(response, False, 0)
 
 
 async def cache_stats(session: AsyncSession) -> dict:
