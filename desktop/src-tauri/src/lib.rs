@@ -214,6 +214,41 @@ async fn decide_approval(id: String, approve: bool) -> Result<DecideResult, ApiE
     parse_json(resp).await
 }
 
+/// One turn of the conversational build interview.
+#[tauri::command]
+async fn build_intake(
+    message: String,
+    session_id: Option<String>,
+) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/build/intake", core_base()))
+        .json(&serde_json::json!({ "message": message, "session_id": session_id }))
+        .timeout(std::time::Duration::from_secs(180))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+/// Write the brief and conduct the agent (run=true actually launches it).
+#[tauri::command]
+async fn build_run(
+    session_id: String,
+    directory: String,
+    run: bool,
+) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/build/run", core_base()))
+        .json(&serde_json::json!({
+            "session_id": session_id, "directory": directory, "run": run
+        }))
+        .timeout(std::time::Duration::from_secs(1800))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
 /// Reports inbox: recent hourly/daily/weekly rollups (§4.4).
 #[tauri::command]
 async fn list_reports() -> Result<serde_json::Value, ApiError> {
@@ -439,6 +474,8 @@ pub fn run() {
             voice_say,
             briefing,
             set_objective,
+            build_intake,
+            build_run,
             list_reports,
             generate_report,
             coding_tools,

@@ -168,6 +168,51 @@ export async function setObjective(objective: string): Promise<void> {
   }
 }
 
+// ---- Conversational build front-door -------------------------------------
+
+export interface IntakeResponse {
+  session_id: string;
+  reply: string;
+  ready: boolean;
+  brief: string | null;
+  agent: string;
+  what: string;
+}
+
+export interface BuildRunResponse {
+  agent: string;
+  model: string | null;
+  executed: boolean;
+  visible: boolean;
+  workspace: { path: string; created: boolean; spec_file?: string | null };
+  note: string;
+  warnings: string[];
+  output: string;
+}
+
+export async function buildIntake(
+  message: string,
+  sessionId: string | null
+): Promise<IntakeResponse> {
+  try {
+    return await invoke<IntakeResponse>("build_intake", { message, sessionId });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function buildRun(
+  sessionId: string,
+  directory: string,
+  run: boolean
+): Promise<BuildRunResponse> {
+  try {
+    return await invoke<BuildRunResponse>("build_run", { sessionId, directory, run });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 export interface Report {
   id: string;
   period: string;

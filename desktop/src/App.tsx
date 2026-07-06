@@ -7,11 +7,18 @@ import { Approvals } from "./components/Approvals";
 import { Voice } from "./components/Voice";
 import { Agents } from "./components/Agents";
 import { Reports } from "./components/Reports";
+import { Build } from "./components/Build";
 import { Splash } from "./components/Splash";
 import { Briefing } from "./components/Briefing";
 import { killSwitch } from "./api";
 
-type Tab = "chat" | "voice" | "agents" | "reports" | "approvals";
+type Tab = "chat" | "voice" | "build" | "agents" | "reports" | "approvals";
+
+// Does the spoken goal look like a "build something" request?
+function isBuildRequest(goal: string): boolean {
+  return /\b(build|create|make|develop|set\s?up|scaffold)\b/i.test(goal) &&
+    /\b(website|site|web\s?app|app|application|api|tool|page|bot|script|game|dashboard|landing)\b/i.test(goal);
+}
 
 // Global kill-switch hotkey (spec §7.3). Cmd+Shift+Escape on macOS.
 // docs/vendor/tauri/plugin-global-shortcut.md
@@ -21,6 +28,17 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("chat");
   const [killFlash, setKillFlash] = useState(false);
   const [briefingDone, setBriefingDone] = useState(false);
+  const [buildSeed, setBuildSeed] = useState<string | undefined>(undefined);
+
+  // When the launch briefing captures a build goal, roll straight into the
+  // Build interview instead of dropping into an empty chat.
+  const onBriefingDone = useCallback((goal?: string) => {
+    setBriefingDone(true);
+    if (goal && isBuildRequest(goal)) {
+      setBuildSeed(goal);
+      setTab("build");
+    }
+  }, []);
 
   // Visual acknowledgement whenever the kill-switch fires, from any source
   // (tray menu, global hotkey, or the header button). The Rust side emits a
@@ -63,7 +81,7 @@ export default function App() {
   return (
     <div className="app">
       <Splash />
-      {!briefingDone && <Briefing onDone={() => setBriefingDone(true)} />}
+      {!briefingDone && <Briefing onDone={onBriefingDone} />}
       <StatusBar
         onKillSwitch={onKillClick}
         hotkeyLabel="⌘⇧⎋"
@@ -91,6 +109,12 @@ export default function App() {
           Voice
         </button>
         <button
+          className={tab === "build" ? "tab active" : "tab"}
+          onClick={() => setTab("build")}
+        >
+          Build
+        </button>
+        <button
           className={tab === "agents" ? "tab active" : "tab"}
           onClick={() => setTab("agents")}
         >
@@ -113,6 +137,7 @@ export default function App() {
       <main className="content">
         {tab === "chat" && <Chat />}
         {tab === "voice" && <Voice />}
+        {tab === "build" && <Build seed={buildSeed} />}
         {tab === "agents" && <Agents />}
         {tab === "reports" && <Reports />}
         {tab === "approvals" && <Approvals />}

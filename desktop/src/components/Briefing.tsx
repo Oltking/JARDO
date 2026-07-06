@@ -10,7 +10,7 @@ import {
 
 // Launch briefing (spec §4.5): on open, Jardo greets the owner, speaks any
 // updates, and asks for the day's objective — which becomes the supervision goal.
-export function Briefing({ onDone }: { onDone: () => void }) {
+export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
   const [data, setData] = useState<BriefingData | null>(null);
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
@@ -37,7 +37,7 @@ export function Briefing({ onDone }: { onDone: () => void }) {
         } catch {
           /* no voice — the visual confirmation still shows */
         }
-        onDone();
+        onDone(g);
       } else {
         try {
           await voiceSay("I didn't catch that. You can say it again, or type it below.");
@@ -80,7 +80,7 @@ export function Briefing({ onDone }: { onDone: () => void }) {
     setBusy(true);
     try {
       await setObjective(g);
-      onDone();
+      onDone(g);
     } catch (e) {
       setError((e as ApiError).message);
       setBusy(false);
@@ -144,7 +144,7 @@ export function Briefing({ onDone }: { onDone: () => void }) {
               </button>
             </div>
 
-            <button className="briefing-skip" onClick={onDone}>
+            <button className="briefing-skip" onClick={() => onDone()}>
               Skip for now
             </button>
           </>
