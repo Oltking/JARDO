@@ -27,7 +27,7 @@ class Decision:
 
 
 async def autonomous_decision(session: AsyncSession, command: str, objective: str,
-                              chat_fn=None) -> Decision:
+                              chat_fn=None, totp_code: str | None = None) -> Decision:
     request = ActionRequest("jardo", "shell.run", command, objective or "")
 
     # 1. Safety — refuse anything risky for unattended execution.
@@ -35,7 +35,20 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
     blocking = [f for f in findings if f.severity in _BLOCK_AT_OR_ABOVE]
     if blocking:
         worst = max(blocking, key=lambda f: _BLOCK_AT_OR_ABOVE.index(f.severity))
-        return Decision(False, f"unsafe to run unattended: {worst.message}",
+        # Truly forbidden actions (e.g. active scanning of third parties, illegal
+        # without authorization — SECURITY.md rule 2) are never permitted.
+        if any("forbidden" in f.message for f in blocking):
+            return Decision(False, f"forbidden and never permitted: {worst.message}",
+                            str(worst.severity))
+        # Otherwise the owner can authorize a risky action with a fresh TOTP code
+        # (spec §4.1 — TOTP is the gate for destructive/high-privilege actions).
+        from core import totp
+        if totp_code and totp.verify(totp_code):
+            return Decision(True, f"owner-authorized via TOTP despite risk "
+                            f"({worst.message})", str(worst.severity))
+        suffix = (" — a TOTP code from you would authorize it"
+                  if totp.is_enrolled() else "")
+        return Decision(False, f"unsafe to run unattended: {worst.message}{suffix}",
                         str(worst.severity))
 
     # 2. Purpose — must serve the owner's objective (if one is set).

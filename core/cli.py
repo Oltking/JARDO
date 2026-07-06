@@ -571,6 +571,40 @@ def oversee(objective: str = typer.Argument(""), end: bool = False,
 
 
 @app.command()
+def totp(action: str = typer.Argument("status"), code: str = "") -> None:
+    """Set up / check the destructive-action gate (enroll|verify|status). A fresh
+    code from your authenticator authorizes actions Jardo would otherwise refuse."""
+    from core import totp as totp_mod
+
+    if action == "enroll":
+        from core.db import SessionFactory
+        from core.memory import MemoryStore
+
+        async def _acct() -> str:
+            async with SessionFactory() as s:
+                owner = await MemoryStore(s).get_owner()
+                return owner.email if owner else "owner@jardo"
+
+        if totp_mod.is_enrolled() and not typer.confirm(
+                "TOTP already set up. Replace it?", default=False):
+            return
+        uri = totp_mod.enroll(asyncio.run(_acct()))
+        console.print("[green]TOTP enrolled.[/green] Add this to your authenticator "
+                      "app (Google Authenticator, 1Password, …):")
+        console.print(f"\n[bold]{uri}[/bold]\n")
+        console.print("[dim]Most apps let you paste an otpauth:// URI or scan a QR of "
+                      "it. Then run: jardo totp verify <code>[/dim]")
+    elif action == "verify":
+        c = code or Prompt.ask("6-digit code")
+        console.print("[green]✓ valid[/green]" if totp_mod.verify(c)
+                      else "[red]✗ invalid or expired[/red]")
+    else:
+        console.print(f"TOTP gate: [bold]{'enrolled' if totp_mod.is_enrolled() else 'not set up'}"
+                      f"[/bold]" + ("" if totp_mod.is_enrolled()
+                                    else " — run: jardo totp enroll"))
+
+
+@app.command()
 def new(request: str = typer.Argument(""), dir: str = ".") -> None:
     """Conversational front-door: say what you want to build; Jardo interviews you
     (asking what it needs, recommending improvements), then runs the agent."""
@@ -654,9 +688,10 @@ def build(instruction: str, agent: str = "claude", dir: str = ".",
 
 
 @app.command()
-def terminal(command: str, goal: str = "") -> None:
+def terminal(command: str, goal: str = "", totp: str = "") -> None:
     """Run a command in your REAL terminal, autonomously gated: Jardo checks
-    safety + purpose and acts on your behalf, refusing anything unsafe (§4.2/§8)."""
+    safety + purpose and acts on your behalf, refusing anything unsafe (§4.2/§8).
+    Pass --totp <code> to authorize a risky command."""
     import asyncio as _asyncio
 
     from core.autonomy.decider import autonomous_decision
@@ -670,7 +705,8 @@ def terminal(command: str, goal: str = "") -> None:
             objective = goal or (active.objective if active else "")
 
             async def gate(cmd: str, g: str) -> tuple[bool, str]:
-                d = await autonomous_decision(session, cmd, objective)
+                d = await autonomous_decision(session, cmd, objective,
+                                              totp_code=totp or None)
                 return d.approve, d.reason
 
             result = await RealTerminal(gate=gate).run(command, objective)
