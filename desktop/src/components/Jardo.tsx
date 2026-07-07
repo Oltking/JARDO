@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   chooseProject,
+  getIdentity,
   sendChat,
   terminalSupervise,
   terminalTick,
@@ -63,15 +64,38 @@ function parseSupervise(text: string): Supervising | null {
   return { goal: text, agent };
 }
 
-// "Where am I / catch me up / what am I working on / what's left" → resume.
+// "Where am I / catch me up / what am I working on / what's left / check my
+// project / where did I stop" → resume-work. Kept broad: these are commands, and
+// letting them slip through to the chat model is what makes Jardo feel dumb.
 function wantsWhereAmI(text: string): boolean {
   const t = text.toLowerCase();
   return (
-    /\bwhere\s+(am\s+i|was\s+i|are\s+we)\b/.test(t) ||
-    /\b(catch me up|resume|pick up where|remind me)\b/.test(t) ||
-    /\bwhat('?s| is| am i)\b.*\b(working on|doing|left|remaining|next|the goal|status)\b/.test(t) ||
-    /\bwhat('?s| is)\b.*\b(remaining|left)\b/.test(t)
+    /\bwhere\s+(am|was|are|were)\b/.test(t) ||
+    /\bwhere\s+(did|do)\s+i\b/.test(t) ||
+    /\b(catch me up|resume|pick up where|pick up from|remind me where|bring me up to speed)\b/.test(t) ||
+    /\bwhere i (stopped|finished|left off|left it|was|ended)\b/.test(t) ||
+    /\bwhat\b.*\bproject\b.*\b(working on|on now|am i on|is this|currently)\b/.test(t) ||
+    /\bwhat('?s| is| am i)\b.*\b(working on|doing now|left|remaining|next|the goal|status|progress)\b/.test(t) ||
+    /\b(check|show|tell me)\b.*\b(where i|my project|the project|my progress|what i (did|finished)|last|finished)\b/.test(t) ||
+    /\bwhat did i (do|finish|work on)\b/.test(t)
   );
+}
+
+// Things Jardo should answer itself, instantly and correctly — never via the
+// model (which invents nonsense like "you're the one being addressed").
+function quickAnswer(text: string, name: string | null): string | null {
+  const t = text.trim().toLowerCase().replace(/[?.!,]+$/g, "");
+  if (/^(who are you|what('?s| is) your name|your name|what are you)\b/.test(t))
+    return "I'm Jardo, your AI chief of staff. I resume your work and supervise coding agents in your terminal.";
+  if (/^who am i\b/.test(t) || /^what('?s| is) my name\b/.test(t))
+    return name
+      ? `You're ${name}.`
+      : "I don't have your name yet — set it in Settings and I'll use it.";
+  if (/^(what can you do|what do you do|how can you help|help me|capabilities|what are you for)\b/.test(t))
+    return "Say “where am I?” and I'll pick up where you left off, or “supervise Claude in my terminal” and I'll answer the agent's permission prompts for you. You can also just ask me things.";
+  if (/^(hi|hey|hello|yo|hiya|hey jardo|good morning|good evening)\b/.test(t) && t.length < 20)
+    return name ? `Hi ${name} — what are we working on?` : "Hi — what are we working on?";
+  return null;
 }
 
 function wantsStop(text: string): boolean {
@@ -106,6 +130,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
+  const nameRef = useRef<string | null>(null);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
@@ -131,6 +156,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
   useEffect(() => {
     voiceStatus().then(setStatus).catch((e: ApiError) => setError(e.message));
+    getIdentity()
+      .then((id) => {
+        nameRef.current = id.name;
+      })
+      .catch(() => undefined);
     return () => {
       runningRef.current = false;
     };
@@ -154,6 +184,16 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       say("jardo", line);
       if (spoken) await speak(line);
       return;
+    }
+
+    // Jardo answers its own identity/capability questions — never the model.
+    if (!superRef.current) {
+      const quick = quickAnswer(msg, nameRef.current);
+      if (quick) {
+        say("jardo", quick);
+        if (spoken) await speak(quick);
+        return;
+      }
     }
 
     if (wantsWhereAmI(msg)) {
