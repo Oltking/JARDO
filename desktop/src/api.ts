@@ -123,6 +123,42 @@ export async function setProvider(
   }
 }
 
+// ---- Terminal supervision (spec §4.3) -------------------------------------
+
+export interface TickResult {
+  watching: boolean;
+  readable?: boolean;
+  prompt?: boolean;
+  answered?: boolean;
+  approved?: boolean;
+  pressed?: boolean;
+  already?: boolean;
+  action?: string;
+  reason?: string;
+  answer?: string;
+  tail?: string;
+  detail?: string;
+}
+
+export async function terminalSupervise(
+  goal: string,
+  agent: string
+): Promise<{ watching: boolean; goal: string; agent: string }> {
+  try {
+    return await invoke("terminal_supervise", { goal, agent });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function terminalTick(): Promise<TickResult> {
+  try {
+    return await invoke<TickResult>("terminal_tick");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Voice (spec §8) ------------------------------------------------------
 
 export interface VoiceInputDevice {

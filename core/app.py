@@ -474,6 +474,109 @@ async def supervision_start(request: ObjectiveRequest,
     return {"objective": request.objective.strip()}
 
 
+# ---- Terminal supervision (spec §4.3) — watch the terminal the owner is
+# already working in and answer the coding agent's permission prompts.
+
+class WatchStartRequest(BaseModel):
+    goal: str
+    agent: str = "claude"
+
+
+@app.post("/terminal/supervise")
+async def terminal_supervise(request: WatchStartRequest,
+                             session: AsyncSession = Depends(get_session)) -> dict:
+    """Start watching the front terminal against a goal. Jardo reads it and
+    answers the agent's yes/no permission prompts on the owner's behalf."""
+    from core.agents import terminal_watch
+    from core.memory import MemoryStore
+    from core.supervision import start_session
+
+    owner = await MemoryStore(session).get_owner()
+    if owner is None:
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
+    try:
+        terminal_watch.read_front_terminal()  # probe: is a terminal readable here?
+    except Exception as exc:  # noqa: BLE001 — no terminal / not macOS
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can't read a terminal to supervise ({exc}). Open Terminal.app "
+                   "with your agent running, then ask me again.",
+        ) from exc
+    await start_session(session, owner.id, request.goal.strip(), agent=request.agent)
+    await session.commit()
+    app.state.answered_prompts = set()  # fresh dedupe per session
+    return {"watching": True, "goal": request.goal.strip(), "agent": request.agent}
+
+
+@app.post("/terminal/tick")
+async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
+    """One supervision beat: read the terminal, and if the agent is waiting on a
+    permission prompt, decide and press the answer. The desktop calls this on a
+    short timer while supervising; keeping the loop client-driven means it stops
+    the instant the owner stops watching."""
+    import hashlib
+
+    from core.agents import terminal_watch
+    from core.autonomy.decider import autonomous_decision
+    from core.memory import MemoryStore
+    from core.supervision import get_active
+
+    active = await get_active(session)
+    if active is None:
+        return {"watching": False}
+
+    try:
+        screen = terminal_watch.read_front_terminal()
+    except Exception as exc:  # noqa: BLE001
+        return {"watching": True, "readable": False, "detail": str(exc)}
+
+    tail = "\n".join(screen.splitlines()[-6:]).strip()
+    prompt = terminal_watch.detect_permission_prompt(screen)
+    if prompt is None:
+        return {"watching": True, "readable": True, "prompt": False, "tail": tail}
+
+    answered = getattr(app.state, "answered_prompts", None)
+    if answered is None:
+        answered = app.state.answered_prompts = set()
+    fingerprint = hashlib.sha256(
+        (prompt.question + "|" + prompt.action).encode()).hexdigest()[:16]
+    if fingerprint in answered:
+        return {"watching": True, "readable": True, "prompt": True,
+                "action": prompt.action, "already": True, "tail": tail}
+
+    # The instinct: safe + on-task → Yes; otherwise No. Uses the local model for
+    # alignment when it's up (same path as the hook).
+    async def _align(p: str) -> str:
+        r = await app.state.ollama.chat(
+            RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b"),
+            [{"role": "user", "content": p}])
+        return r.content
+
+    chat_fn = _align if await app.state.ollama.is_up() else None
+    decision = await autonomous_decision(session, prompt.action, active.objective,
+                                         chat_fn=chat_fn)
+    try:
+        terminal_watch.press_answer(prompt, decision.approve)
+        pressed = True
+    except Exception as exc:  # noqa: BLE001 — couldn't inject; tell the owner
+        pressed = False
+        decision = type(decision)(decision.approve,
+                                  f"{decision.reason} (couldn't press: {exc})",
+                                  decision.severity)
+
+    answered.add(fingerprint)
+    await MemoryStore(session).audit(
+        "jardo", "terminal.answered",
+        {"action": prompt.action[:300], "approved": decision.approve,
+         "reason": decision.reason, "pressed": pressed})
+    await session.commit()
+    return {"watching": True, "readable": True, "prompt": True,
+            "answered": True, "approved": decision.approve, "pressed": pressed,
+            "action": prompt.action, "reason": decision.reason,
+            "answer": prompt.approve_key if decision.approve else prompt.deny_key,
+            "tail": tail}
+
+
 @app.delete("/supervision")
 async def supervision_end(session: AsyncSession = Depends(get_session)) -> dict:
     from core.memory import MemoryStore
