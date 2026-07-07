@@ -35,6 +35,13 @@ class SpeechToText:
         """audio: path to a file OR a numpy float32/int16 array at 16 kHz."""
         import numpy as np
         model = self._ensure_model()
+        # Optional noise suppression (config flag; transparent no-op if the extra
+        # isn't installed). Runs on int16 before the float conversion below.
+        if hasattr(audio, "dtype") and audio.dtype == np.int16:
+            from core.config import settings
+            if settings.voice_denoise:
+                from core.voice.denoise import denoise
+                audio = denoise(audio)
         if hasattr(audio, "dtype") and audio.dtype == np.int16:
             audio = audio.astype(np.float32) / 32768.0  # whisper wants float32 in [-1,1]
         segments, _info = model.transcribe(

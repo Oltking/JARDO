@@ -50,6 +50,10 @@ class Settings(BaseSettings):
         Path.home() / ".local/share/jardo/piper/en_US-hfc_female-medium.onnx"
     )
     voice_stt_model: str = "small.en"  # faster-whisper model (accuracy vs. speed)
+    # Optional neural noise suppression before STT (DeepFilterNet). Off by default
+    # and measured, not assumed — Whisper can do worse on over-denoised audio.
+    # Needs the `denoise` extra: uv sync --extra denoise
+    voice_denoise: bool = False
 
 
 settings = Settings()

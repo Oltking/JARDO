@@ -231,6 +231,35 @@ def report(period: str = "daily", show: bool = True) -> None:
     asyncio.run(_run())
 
 
+@app.command(name="denoise-test")
+def denoise_test(seconds: float = 5.0) -> None:
+    """A/B noise suppression: record once, transcribe with denoise OFF vs ON, so
+    you keep it only if it measurably helps (spec §8). Needs: uv sync --extra denoise."""
+    from core.voice import denoise as dn
+    from core.voice import mic
+    from core.voice.stt import SpeechToText
+
+    if not dn.available():
+        console.print("[yellow]DeepFilterNet isn't installed. Run: "
+                      "uv sync --extra denoise[/yellow]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Speak now[/bold] — recording {seconds:.0f}s "
+                  "(add some background noise to make the test real)…")
+    audio = mic.record_seconds(seconds)
+    stt = SpeechToText(settings.voice_stt_model)
+
+    console.print("[dim]transcribing raw…[/dim]")
+    raw = stt.transcribe(audio)
+    console.print("[dim]denoising + transcribing…[/dim]")
+    cleaned = stt.transcribe(dn.denoise(audio))
+
+    console.print(f"\n[bold]OFF[/bold] (raw):     {raw or '[dim](nothing)[/dim]'}")
+    console.print(f"[bold]ON[/bold]  (denoise): {cleaned or '[dim](nothing)[/dim]'}")
+    console.print("\nKeep denoise on only if ON is clearly better. Enable with "
+                  "[bold]JARDO_VOICE_DENOISE=true[/bold].")
+
+
 @app.command()
 def inbox(limit: int = 10) -> None:
     """List stored reports (spec §4.4: reports are searchable)."""
