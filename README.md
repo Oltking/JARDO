@@ -30,7 +30,7 @@ Jardo is the layer that makes an agent something you can actually **delegate to*
 
 The differentiators, in order:
 
-1. **Autonomous supervision, not just automation.** Jardo decides for you after checking *safety* (a rule-based danger scan) and *purpose* (does this action serve the goal you stated?). It never blindly clicks yes. Risky actions are declined; genuinely dangerous ones are refused outright.
+1. **Autonomous supervision, not just automation.** Jardo decides for you after checking *safety* and *purpose* (does this action serve the goal you stated?). When acting unattended it is **conservative by default**: it auto-approves only commands it positively recognizes as safe (reads, tests, builds, in-project git/installs) and **declines everything else** — an unrecognized or destructive command is never auto-run. It never blindly clicks yes.
 2. **Cost as a first-class feature.** A cost-accuracy router picks local → self-hosted AMD → Fireworks by live $/token math; exact + semantic response caching means repeated work is free; agent briefs push for small, committed steps to stay inside the session's token budget.
 3. **Security-first by design.** Secrets live in the OS Keychain, never in files. A local API token gates every request. A global kill-switch halts everything. Audit logs are append-only and redact secrets.
 4. **Private by default.** Speech-to-text, wake handling, and memory recall run **on your machine**. Nothing about your voice or your projects leaves the device unless a cloud model is actually needed.
@@ -110,7 +110,7 @@ Jardo treats your token bill as something to actively minimize without losing qu
 
 ## Security & privacy
 
-Jardo is built security-first. Highlights: secrets only in the OS Keychain; a token gates the local API; passive checks only — never active scanning of third-party systems; a kill-switch that halts synthetic input instantly; audit logs that are append-only and secret-redacted.
+Jardo is built security-first. Highlights: secrets only in the OS Keychain; a constant-time token gates the local API; passive checks only — never active scanning of third-party systems; a **kill-switch** (tray, `⌘⇧⎋` hotkey, or header) that immediately halts the always-on listening and terminal supervision; conservative-by-default auto-approval; audit logs that are append-only and secret-redacted.
 
 ---
 

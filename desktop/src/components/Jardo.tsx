@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   chooseProject,
   getIdentity,
@@ -202,6 +203,23 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     if (autoStart && status?.available && !runningRef.current) listenLoop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, status?.available]);
+
+  // Kill-switch — a real halt (audit #2). Stops the always-on voice loop and the
+  // supervision tick, so Jardo immediately stops listening and stops pressing
+  // keys in your terminal. Fired from the tray, hotkey, or header Stop button.
+  useEffect(() => {
+    const un = listen("kill-switch", () => {
+      runningRef.current = false; // stop the voice loop after its current frame
+      pendingRef.current = null; // drop any unconfirmed action
+      stopSupervising(); // clears the tick interval → no more key presses
+      setPhase("idle");
+      say("event", "Kill-switch — halted all autonomous actions.", false);
+    });
+    return () => {
+      un.then((f) => f());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- one place every utterance flows through, voice or typed --------------
   async function handle(text: string, spoken: boolean) {

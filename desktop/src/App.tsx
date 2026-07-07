@@ -80,7 +80,7 @@ export default function App() {
 
       {killFlash && (
         <div className="kill-banner" role="alert">
-          KILL-SWITCH engaged — synthetic input halted.
+          KILL-SWITCH engaged — listening and terminal supervision halted.
         </div>
       )}
 

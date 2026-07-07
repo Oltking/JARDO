@@ -530,8 +530,10 @@ fn kill_switch(app: AppHandle, source: String) -> Result<(), String> {
 }
 
 fn fire_kill_switch(app: &AppHandle, source: &str) {
-    // Phase 7 will additionally call enigo/OS APIs to halt synthetic input.
-    log::warn!("KILL-SWITCH engaged (source: {source}) — halting synthetic input (stub)");
+    // The webview halts Jardo's autonomous actions on this event: it stops the
+    // always-on voice loop and the supervision tick, so no more terminal key
+    // presses happen (see Jardo.tsx kill-switch listener).
+    log::warn!("KILL-SWITCH engaged (source: {source}) — halting autonomous actions");
     eprintln!("[Jardo] KILL-SWITCH engaged (source: {source})");
     let _ = app.emit("kill-switch", serde_json::json!({ "source": source }));
 }
@@ -571,8 +573,12 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
     let menu = Menu::with_items(app, &[&show_i, &hide_i, &sep, &kill_i, &sep, &quit_i])?;
 
-    TrayIconBuilder::with_id("jardo-tray")
-        .icon(app.default_window_icon().unwrap().clone())
+    let mut tray = TrayIconBuilder::with_id("jardo-tray");
+    // Don't panic if the bundle has no icon (audit #6) — the tray still works.
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray
         .tooltip("Jardo")
         .menu(&menu)
         .show_menu_on_left_click(false)

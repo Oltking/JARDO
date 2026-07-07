@@ -70,11 +70,17 @@ _API_TOKEN = get_or_create_token()
 _AUTH_EXEMPT = {"/healthz"}
 
 
+import hmac  # noqa: E402
+
+_EXPECTED_AUTH = f"Bearer {_API_TOKEN}"
+
+
 @app.middleware("http")
 async def _require_token(request, call_next):
     if request.method == "OPTIONS" or request.url.path in _AUTH_EXEMPT:
         return await call_next(request)
-    if request.headers.get("authorization", "") != f"Bearer {_API_TOKEN}":
+    # Constant-time compare so the token can't be recovered by timing (audit #3).
+    if not hmac.compare_digest(request.headers.get("authorization", ""), _EXPECTED_AUTH):
         return JSONResponse({"detail": "unauthorized"}, status_code=401)
     return await call_next(request)
 
@@ -785,7 +791,7 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     else:
         chat_fn = _align if await app.state.ollama.is_up() else None
         decision = await autonomous_decision(session, prompt.action, active.objective,
-                                             chat_fn=chat_fn)
+                                             chat_fn=chat_fn, conservative=True)
     pressed = False
     needs_accessibility = False
     try:

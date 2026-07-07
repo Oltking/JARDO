@@ -27,7 +27,8 @@ class Decision:
 
 
 async def autonomous_decision(session: AsyncSession, command: str, objective: str,
-                              chat_fn=None, totp_code: str | None = None) -> Decision:
+                              chat_fn=None, totp_code: str | None = None,
+                              conservative: bool = False) -> Decision:
     request = ActionRequest("jardo", "shell.run", command, objective or "")
 
     # 1. Safety — refuse anything risky for unattended execution.
@@ -50,6 +51,17 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
                   if totp.is_enrolled() else "")
         return Decision(False, f"unsafe to run unattended: {worst.message}{suffix}",
                         str(worst.severity))
+
+    # 1b. Conservative posture for unattended auto-approval (audit #1): a denylist
+    # can't catch every destructive command, so only auto-approve commands we
+    # positively recognize as safe. Everything else is declined (never run) — the
+    # owner can run it themselves.
+    if conservative:
+        from core.sentinel.checks import is_recognizably_safe
+        if not is_recognizably_safe(command):
+            return Decision(False, "not a recognizably-safe command — declined for "
+                            "safety while acting unattended; run it yourself if you "
+                            "intend to", "low")
 
     # 2. Purpose — must serve the owner's objective (if one is set).
     if objective and objective.strip():

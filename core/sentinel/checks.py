@@ -12,18 +12,68 @@ import re
 from core.sentinel.models import ActionRequest, Finding, Severity
 
 # Dangerous shell / code patterns (§6.1). Each entry: (pattern, severity, label).
+# A denylist can never be complete, so autonomous approval ALSO requires the
+# command to be on the safe allowlist below (is_recognizably_safe) — this list
+# is the second line, catching dangerous *flags* on otherwise-allowlisted tools.
 _DANGEROUS = [
-    (re.compile(r"rm\s+-rf?\s+[/~]|rm\s+-fr?\s+[/~]"), Severity.CRITICAL, "recursive delete at root/home"),
-    (re.compile(r"\bdd\s+if=.*of=/dev/"), Severity.CRITICAL, "raw disk write"),
+    (re.compile(r"rm\s+-[a-z]*r[a-z]*\s+[/~]|rm\s+-[a-z]*f[a-z]*\s+[/~]"), Severity.CRITICAL, "recursive delete at root/home"),
+    (re.compile(r"\brm\s+-[a-z]*r"), Severity.MEDIUM, "recursive delete"),
+    (re.compile(r"\bfind\b[^\n]*-(delete|exec|execdir)\b"), Severity.HIGH, "find with delete/exec"),
+    (re.compile(r"\bgit\s+clean\s+-[a-z]*[fd]"), Severity.MEDIUM, "git clean (removes untracked files)"),
+    (re.compile(r"\b(shred|truncate)\b"), Severity.HIGH, "file destruction"),
+    (re.compile(r"\bdd\s+if=.*of=/dev/|>\s*/dev/(sd|disk|nvme|hd)"), Severity.CRITICAL, "raw disk write"),
     (re.compile(r"mkfs\.|diskutil\s+erase", re.I), Severity.CRITICAL, "filesystem format"),
-    (re.compile(r"curl[^|;\n]*\|\s*(ba)?sh|wget[^|;\n]*\|\s*(ba)?sh"), Severity.HIGH, "pipe remote script to shell"),
-    (re.compile(r"\beval\s*\(|\bexec\s*\("), Severity.HIGH, "dynamic code evaluation"),
-    (re.compile(r"\bsudo\b|\bchmod\s+777\b"), Severity.MEDIUM, "privilege escalation / world-writable"),
+    (re.compile(r"\(\s*\)\s*\{[^}]*:\s*\|\s*:"), Severity.HIGH, "fork bomb"),
+    (re.compile(r"curl[^|;\n]*\|\s*(ba|z|k)?sh|wget[^|;\n]*\|\s*(ba|z|k)?sh"), Severity.HIGH, "pipe remote script to shell"),
+    (re.compile(r"\b(python3?|perl|ruby|php|node|deno|osascript)\b[^\n]*\s-(c|e)\b"), Severity.MEDIUM, "inline code execution"),
+    (re.compile(r"\beval\s*\(|\bexec\s*\(|\beval\s+[\"'$]"), Severity.HIGH, "dynamic code evaluation"),
+    (re.compile(r"\bsudo\b|\bchmod\s+(-[a-zA-Z]*R[a-zA-Z]*\s+)?[0-7]*7[0-7]{2}\b|\bchmod\s+-[a-zA-Z]*R"), Severity.MEDIUM, "privilege escalation / recursive perms"),
     (re.compile(r"/etc/(passwd|shadow|sudoers)|~/.ssh/|id_rsa|\.aws/credentials|\.env\b"), Severity.HIGH, "credential or system file access"),
     (re.compile(r"\bDROP\s+(TABLE|DATABASE)\b|\bTRUNCATE\b", re.I), Severity.HIGH, "destructive SQL"),
-    (re.compile(r"git\s+push\s+.*--force|git\s+reset\s+--hard\s+origin"), Severity.MEDIUM, "history-destructive git"),
+    (re.compile(r"git\s+push\s+[^\n]*--force|git\s+reset\s+--hard\s+origin"), Severity.MEDIUM, "history-destructive git"),
     (re.compile(r"\bnmap\b|\bmasscan\b|\bsqlmap\b|\bhydra\b|\bnikto\b", re.I), Severity.CRITICAL, "active scanning tool (forbidden, SECURITY.md rule 2)"),
 ]
+
+# Allowlist for UNATTENDED auto-approval (audit #1): a command is auto-approvable
+# only if every segment's leading program is a recognized dev/read-only tool.
+# Anything else is declined (not run) when Jardo acts on its own — a denylist
+# alone is unsafe. Dangerous *flags* on these tools are still caught above.
+_SAFE_PROGRAMS = frozenset("""
+ls pwd cd echo printf cat head tail less more wc grep rg egrep fgrep ag sort uniq
+cut awk sed tr column jq yq diff comm file stat tree which type command env
+printenv date whoami hostname uname df du ps sleep true clear open
+git gh
+node npm pnpm yarn npx bun deno tsc vite next eslint prettier jest vitest
+python python3 pip pip3 uv uvx pipx pytest ruff black mypy isort flake8 pylint
+tox poetry pipenv hatch alembic uvicorn
+cargo rustc rustup rustfmt clippy go gofmt godoc
+make cmake ninja meson gradle mvn dotnet
+mkdir touch cp mv ln readlink realpath basename dirname
+curl wget rsync scp
+brew
+docker
+tsc bundle rake ruby gem php composer swift xcodebuild
+""".split())
+
+
+def is_recognizably_safe(command: str) -> bool:
+    """True only if every && / || / | / ; segment starts with a recognized safe
+    program. Used to keep unattended auto-approval conservative: unknown commands
+    are declined, never run (audit #1)."""
+    if not command or not command.strip():
+        return False
+    for segment in re.split(r"&&|\|\||\||;|\n", command):
+        toks = segment.strip().split()
+        # Skip leading VAR=value assignments.
+        i = 0
+        while i < len(toks) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", toks[i]):
+            i += 1
+        if i >= len(toks):
+            continue  # empty segment (e.g. trailing operator)
+        program = toks[i].rsplit("/", 1)[-1]  # basename of ./bin/tool
+        if program not in _SAFE_PROGRAMS:
+            return False
+    return True
 
 _SECRET_PATTERNS = [
     (re.compile(r"(sk|pk|api|key|token|secret)[-_][A-Za-z0-9_-]{16,}", re.I), "credential-shaped string"),
