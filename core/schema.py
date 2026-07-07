@@ -144,6 +144,27 @@ class SupervisionSession(Base):
         DateTime(timezone=True), nullable=True)
 
 
+class Project(Base):
+    """A folder Jardo tracks for the owner (spec §4.5 resume-work). Jardo answers
+    "where am I?" from this record plus the coding agent's OWN on-disk memory
+    (~/.claude/projects/<path>/*.jsonl) and git — never by re-reading the codebase,
+    which would burn tokens. `goal` and `notes` are the owner's stated intent;
+    everything else is derived live at inspection time."""
+
+    __tablename__ = "projects"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    path: Mapped[str] = mapped_column(Text)              # absolute folder path
+    goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    last_opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, index=True)
+
+
 class RoutingLog(Base):
     """Every routing decision (spec §5.3): task_id, route, est/alt cost, saved_$."""
 

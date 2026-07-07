@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  chooseProject,
   sendChat,
   terminalSupervise,
   terminalTick,
   voiceSay,
   voiceStatus,
   voiceTranscribe,
+  whereAmI,
   type ApiError,
   type VoiceStatus,
 } from "../api";
@@ -59,6 +61,17 @@ function parseSupervise(text: string): Supervising | null {
         ? "cursor"
         : "claude"; // default incl. the "cloud" mishearing
   return { goal: text, agent };
+}
+
+// "Where am I / catch me up / what am I working on / what's left" → resume.
+function wantsWhereAmI(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    /\bwhere\s+(am\s+i|was\s+i|are\s+we)\b/.test(t) ||
+    /\b(catch me up|resume|pick up where|remind me)\b/.test(t) ||
+    /\bwhat('?s| is| am i)\b.*\b(working on|doing|left|remaining|next|the goal|status)\b/.test(t) ||
+    /\bwhat('?s| is)\b.*\b(remaining|left)\b/.test(t)
+  );
 }
 
 function wantsStop(text: string): boolean {
@@ -143,6 +156,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       return;
     }
 
+    if (wantsWhereAmI(msg)) {
+      await doWhereAmI(spoken);
+      return;
+    }
+
     const intent = parseSupervise(msg);
     if (intent) {
       if (superRef.current) {
@@ -204,6 +222,36 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     } finally {
       setPhase("idle");
       runningRef.current = false;
+    }
+  }
+
+  // ---- "where am I?" resume-work --------------------------------------------
+  async function doWhereAmI(spoken: boolean) {
+    setPhase("thinking");
+    try {
+      let res = await whereAmI(null);
+      if (res.needs_folder) {
+        const ask = "Which project? Pick the folder you're working on.";
+        say("jardo", ask);
+        if (spoken) await speak(ask);
+        const chosen = await chooseProject(); // native folder picker
+        res = await whereAmI(chosen.path);
+      }
+      const line = res.spoken || "I couldn't read that project.";
+      say("jardo", line);
+      if (res.from_agent_memory === false && res.found) {
+        say("event", "read from git (no agent memory found for this folder)", true);
+      }
+      if (spoken) {
+        setPhase("speaking");
+        await speak(line);
+      }
+    } catch (e) {
+      const err = e as ApiError;
+      // 409 from choose = the owner cancelled the picker; stay quiet.
+      if (err.status !== 409) setError(err.message || "Couldn't check the project.");
+    } finally {
+      setPhase("idle");
     }
   }
 
@@ -328,8 +376,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
             <img className="welcome-logo" src="/jardo-logo.png" alt="Jardo" />
             <p className="welcome-title">Jardo</p>
             <p className="welcome-sub">
-              I'm listening. Ask me anything — or say “supervise Claude in my
-              terminal” and I'll handle the permission prompts for you.
+              I'm listening. Say “where am I?” to pick up where you left off, or
+              “supervise Claude in my terminal” and I'll handle the permission
+              prompts for you.
             </p>
           </div>
         )}

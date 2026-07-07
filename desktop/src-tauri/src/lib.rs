@@ -226,6 +226,71 @@ async fn set_provider(
 }
 
 #[tauri::command]
+async fn get_identity() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/settings/identity", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn set_identity(
+    name: Option<String>,
+    pronoun_style: Option<String>,
+) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/settings/identity", core_base()))
+        .json(&serde_json::json!({ "name": name, "pronoun_style": pronoun_style }))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn get_projects() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/projects", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn get_projects_root() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/settings/projects-root", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn set_projects_root(path: Option<String>) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/settings/projects-root", core_base()))
+        .json(&serde_json::json!({ "path": path }))
+        .timeout(std::time::Duration::from_secs(180))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn choose_project() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/projects/choose", core_base()))
+        .timeout(std::time::Duration::from_secs(180))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn where_am_i(path: Option<String>) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/projects/whereami", core_base()))
+        .json(&serde_json::json!({ "path": path }))
+        .timeout(std::time::Duration::from_secs(60))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn terminal_supervise(
     goal: String,
     agent: String,
@@ -534,6 +599,13 @@ pub fn run() {
             send_chat,
             get_providers,
             set_provider,
+            get_identity,
+            set_identity,
+            get_projects,
+            get_projects_root,
+            set_projects_root,
+            choose_project,
+            where_am_i,
             terminal_supervise,
             terminal_tick,
             get_memory,

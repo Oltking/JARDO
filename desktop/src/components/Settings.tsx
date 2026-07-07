@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import {
+  getIdentity,
   getProviders,
+  getProjectsRoot,
+  setIdentity,
   setProvider,
+  setProjectsRoot,
   type ApiError,
   type ProviderStatus,
 } from "../api";
@@ -17,6 +21,33 @@ export function Settings() {
   const [saving, setSaving] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState<Record<string, string>>({});
   const [urlDraft, setUrlDraft] = useState<Record<string, string>>({});
+  const [name, setName] = useState("");
+  const [pronoun, setPronoun] = useState("sir");
+  const [root, setRoot] = useState<string | null>(null);
+  const [savedName, setSavedName] = useState(false);
+
+  async function saveIdentity() {
+    setError(null);
+    try {
+      const id = await setIdentity(name.trim() || null, pronoun);
+      setName(id.name ?? "");
+      setSavedName(true);
+      setTimeout(() => setSavedName(false), 1500);
+    } catch (e) {
+      setError((e as ApiError).message);
+    }
+  }
+
+  async function pickRoot() {
+    setError(null);
+    try {
+      const r = await setProjectsRoot(null); // null → native folder chooser
+      setRoot(r.root);
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status !== 409) setError(err.message); // 409 = cancelled
+    }
+  }
 
   async function refresh() {
     try {
@@ -30,6 +61,15 @@ export function Settings() {
 
   useEffect(() => {
     refresh();
+    getIdentity()
+      .then((id) => {
+        setName(id.name ?? "");
+        if (id.pronoun_style) setPronoun(id.pronoun_style);
+      })
+      .catch(() => undefined);
+    getProjectsRoot()
+      .then((r) => setRoot(r.root))
+      .catch(() => undefined);
   }, []);
 
   async function save(name: string, needsUrl: boolean) {
@@ -53,17 +93,60 @@ export function Settings() {
 
   return (
     <div className="settings">
-      <h2>Providers</h2>
-      <p className="settings-lead">
-        Paste an inference key and Jardo starts using it. When more than one is
-        ready it prefers the cheaper self-hosted option (AMD).
-      </p>
-
       {error && (
         <div className="banner error" role="alert">
           {error}
         </div>
       )}
+
+      <h2>You</h2>
+      <p className="settings-lead">What should Jardo call you?</p>
+      <div className="provider-card">
+        <label className="field">
+          <span>Name</span>
+          <input
+            type="text"
+            autoComplete="off"
+            placeholder="e.g. Alex"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>Honorific</span>
+          <select
+            value={pronoun}
+            onChange={(e) => setPronoun(e.target.value)}
+            className="settings-select"
+          >
+            <option value="sir">sir</option>
+            <option value="ma">ma’am</option>
+          </select>
+        </label>
+        <button className="primary" onClick={saveIdentity}>
+          {savedName ? "Saved ✓" : "Save"}
+        </button>
+      </div>
+
+      <h2>Projects folder</h2>
+      <p className="settings-lead">
+        The folder that holds all your projects. Jardo remembers it, lists your
+        projects from it, and saves new ones inside.
+      </p>
+      <div className="provider-card">
+        <div className="root-row">
+          <code className="root-path">{root || "not set"}</code>
+          <button className="primary" onClick={pickRoot}>
+            {root ? "Change…" : "Choose…"}
+          </button>
+        </div>
+      </div>
+
+      <h2>Providers</h2>
+      <p className="settings-lead">
+        Paste an inference key and Jardo starts using it. When more than one is
+        ready it prefers the cheaper self-hosted option (AMD).
+      </p>
 
       {providers.map((p) => {
         const needsUrl = p.name === "amd";

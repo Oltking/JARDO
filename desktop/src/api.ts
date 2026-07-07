@@ -123,6 +123,84 @@ export async function setProvider(
   }
 }
 
+// ---- Identity + Projects (spec §1, §4.5) ----------------------------------
+
+export interface Identity {
+  name: string | null;
+  pronoun_style: string | null;
+}
+
+export async function getIdentity(): Promise<Identity> {
+  return invoke<Identity>("get_identity");
+}
+
+export async function setIdentity(
+  name: string | null,
+  pronounStyle: string | null
+): Promise<Identity> {
+  try {
+    return await invoke<Identity>("set_identity", { name, pronounStyle });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export interface WhereAmI {
+  needs_folder?: boolean;
+  found?: boolean;
+  name?: string;
+  path?: string;
+  goal?: string | null;
+  last_focus?: string | null;
+  last_active?: string | null;
+  done?: string[];
+  current?: string[];
+  attention?: string[];
+  branch?: string | null;
+  from_agent_memory?: boolean;
+  spoken?: string;
+}
+
+export async function whereAmI(path: string | null): Promise<WhereAmI> {
+  try {
+    return await invoke<WhereAmI>("where_am_i", { path });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function chooseProject(): Promise<{ path: string }> {
+  try {
+    return await invoke<{ path: string }>("choose_project");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export interface ProjectsInfo {
+  root: string | null;
+  folders: { name: string; path: string; is_git: boolean }[];
+  tracked: { name: string; path: string; goal: string | null; last_opened_at: string }[];
+}
+
+export async function getProjects(): Promise<ProjectsInfo> {
+  return invoke<ProjectsInfo>("get_projects");
+}
+
+export async function getProjectsRoot(): Promise<{ root: string | null }> {
+  return invoke<{ root: string | null }>("get_projects_root");
+}
+
+export async function setProjectsRoot(
+  path: string | null
+): Promise<{ root: string }> {
+  try {
+    return await invoke<{ root: string }>("set_projects_root", { path });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Terminal supervision (spec §4.3) -------------------------------------
 
 export interface TickResult {

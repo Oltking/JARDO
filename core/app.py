@@ -208,6 +208,111 @@ async def set_provider(name: str, body: ProviderKeyRequest) -> dict:
     return {"providers": providers.status(), "active": providers.configured()}
 
 
+# ---- Identity settings — the name Jardo calls the owner (spec §1). Per-user,
+# set at setup but editable here so it's a real product setting, not hardcoded.
+
+class IdentityRequest(BaseModel):
+    name: str | None = None
+    pronoun_style: str | None = None  # "sir" | "ma"
+
+
+@app.get("/settings/identity")
+async def get_identity(session: AsyncSession = Depends(get_session)) -> dict:
+    owner = await MemoryStore(session).get_owner()
+    if owner is None:
+        return {"name": None, "pronoun_style": None}
+    return {"name": owner.name, "pronoun_style": owner.pronoun_style}
+
+
+@app.post("/settings/identity")
+async def set_identity(body: IdentityRequest,
+                       session: AsyncSession = Depends(get_session)) -> dict:
+    owner = await MemoryStore(session).get_owner()
+    if owner is None:
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
+    if body.name and body.name.strip():
+        owner.name = body.name.strip()[:120]
+    if body.pronoun_style in ("sir", "ma"):
+        owner.pronoun_style = body.pronoun_style
+    await session.commit()
+    return {"name": owner.name, "pronoun_style": owner.pronoun_style}
+
+
+# ---- Projects (spec §4.5) — "where am I?" resume-work. The owner picks a folder
+# (or Jardo lists their projects root); Jardo answers from the agent's own memory
+# + git, never by re-reading the codebase.
+
+class WhereAmIRequest(BaseModel):
+    path: str | None = None  # None → most-recently-opened project
+
+
+@app.get("/settings/projects-root")
+async def get_projects_root() -> dict:
+    from core import appsettings
+    return {"root": appsettings.get("projects_root")}
+
+
+@app.post("/settings/projects-root")
+async def set_projects_root(body: WhereAmIRequest) -> dict:
+    from core import appsettings
+    from core.projects import choose_folder
+    root = (body.path or "").strip() or choose_folder("Pick the folder that holds "
+                                                      "all your projects")
+    if not root:
+        raise HTTPException(status_code=409, detail="No folder chosen.")
+    appsettings.set("projects_root", root)
+    return {"root": root}
+
+
+@app.get("/projects")
+async def list_projects(session: AsyncSession = Depends(get_session)) -> dict:
+    from core import appsettings
+    from core.projects import ProjectStore, list_folders
+
+    owner = await MemoryStore(session).get_owner()
+    tracked = await ProjectStore(session).list(owner.id) if owner else []
+    root = appsettings.get("projects_root")
+    return {
+        "root": root,
+        "folders": list_folders(root) if root else [],
+        "tracked": [{"name": p.name, "path": p.path, "goal": p.goal,
+                     "last_opened_at": p.last_opened_at.isoformat()} for p in tracked],
+    }
+
+
+@app.post("/projects/choose")
+async def projects_choose() -> dict:
+    from core.projects import choose_folder
+    path = choose_folder()
+    if not path:
+        raise HTTPException(status_code=409, detail="No folder chosen.")
+    return {"path": path}
+
+
+@app.post("/projects/whereami")
+async def projects_whereami(body: WhereAmIRequest,
+                            session: AsyncSession = Depends(get_session)) -> dict:
+    from core.projects import ProjectStore, inspect_project, where_am_i
+
+    owner = await MemoryStore(session).get_owner()
+    if owner is None:
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
+    store = ProjectStore(session)
+
+    path = (body.path or "").strip()
+    if not path:
+        active = await store.get_active(owner.id)
+        if active is None:
+            # Nothing to resume — the UI should offer a folder pick.
+            return {"needs_folder": True}
+        path = active.path
+
+    project = await store.upsert(owner.id, path)  # register + mark most-recent
+    answer = where_am_i(inspect_project(project.path, goal=project.goal))
+    await session.commit()
+    return answer
+
+
 @app.get("/memory")
 async def list_memory(session: AsyncSession = Depends(get_session)) -> list[dict]:
     store = MemoryStore(session)
