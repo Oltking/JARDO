@@ -29,28 +29,48 @@ interface Supervising {
   agent: string;
 }
 
-// Does an utterance mean "go watch my terminal"?
+// Speech-to-text routinely mangles "Claude" → "cloud/clod/claud" and "supervise"
+// → "superwise/supavise". We match loosely on purpose: it's far better to start
+// watching when the owner meant it than to drop the request into the chat model.
+const CLAUDE = /\b(claude|cloud|claud|clod|glaude|clawed)\b/;
+const AGENT_WORDS = /\b(terminal|gemini|codex|cursor|agent|prompt|prompts|permission|permissions)\b/;
+const STRONG_VERB = /\b(supervise|superwise|supavise|oversee|monitor)\b/;
+// Softer "just do the clicking" phrasings the owner actually uses out loud.
+const SOFT_VERB = /\b(watch|keep an eye|handle|take over|answer|click|clicking|press|pressing|approve|approving|accept|accepting|confirm|allow|say yes|go through)\b/;
+const YES_WORDS = /\b(yes|yeah|proceed|approve|accept|allow|permission)\b/;
+
+// Does an utterance mean "go watch my terminal and press the buttons for me"?
 function parseSupervise(text: string): Supervising | null {
   const t = text.toLowerCase();
-  const wantsWatch =
-    /\b(supervise|oversee|watch|monitor|keep an eye|handle|take over|answer)\b/.test(t);
-  const hasTarget = /\b(terminal|claude|gemini|codex|cursor|agent|permission)\b/.test(t);
-  if (wantsWatch && hasTarget) {
-    const agent = /gemini/.test(t)
-      ? "gemini"
-      : /codex/.test(t)
-        ? "codex"
-        : /cursor/.test(t)
-          ? "cursor"
-          : "claude";
-    return { goal: text, agent };
-  }
-  return null;
+  const hasTarget = AGENT_WORDS.test(t) || CLAUDE.test(t);
+  // A strong verb ("supervise it") is enough on its own. A soft verb ("keep
+  // clicking yes", "help me click through the terminal") needs a target or a
+  // yes-word to disambiguate from ordinary chat.
+  const trigger = STRONG_VERB.test(t) || (SOFT_VERB.test(t) && (hasTarget || YES_WORDS.test(t)));
+  if (!trigger) return null;
+  const agent = /gemini/.test(t)
+    ? "gemini"
+    : /codex/.test(t)
+      ? "codex"
+      : /cursor/.test(t)
+        ? "cursor"
+        : "claude"; // default incl. the "cloud" mishearing
+  return { goal: text, agent };
 }
 
 function wantsStop(text: string): boolean {
-  return /\b(stop|pause|that's enough|stand down|stop watching|stop supervising)\b/.test(
+  return /\b(stop|pause|that'?s enough|stand down|never ?mind|cancel|hold on)\b/.test(
     text.toLowerCase()
+  );
+}
+
+// Short affirmations / cheerleading while supervising — must NOT be fed to the
+// chat model (it would answer with nonsense). Jardo just keeps watching.
+function isFiller(text: string): boolean {
+  const t = text.trim().toLowerCase().replace(/[.!?,]+$/g, "");
+  if (t.length <= 3) return true;
+  return /^(yes|yeah|yep|ok|okay|good|nice|cool|great|perfect|beautiful|thanks|thank you|keep going|keep clicking|keep at it|go on|continue|come on|do it|please|right|exactly|correct)\b/.test(
+    t
   );
 }
 
@@ -105,9 +125,21 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
     const intent = parseSupervise(msg);
     if (intent) {
+      if (superRef.current) {
+        // Already watching — the owner is just reaffirming. Reassure, don't
+        // restart, and never send this to the chat model.
+        const line = `Still on it — I'm watching your terminal and handling ${superRef.current.agent}'s prompts.`;
+        say("jardo", line);
+        if (spoken) voiceSay(line).catch(() => undefined);
+        return;
+      }
       await startSupervising(intent, spoken);
       return;
     }
+
+    // While supervising, ignore filler/cheerleading so the weak chat model never
+    // gets a chance to answer with nonsense over the top of the real work.
+    if (superRef.current && isFiller(msg)) return;
 
     setPhase("thinking");
     try {
@@ -156,9 +188,12 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   async function startSupervising(intent: Supervising, spoken: boolean) {
     setPhase("thinking");
     try {
-      await terminalSupervise(intent.goal, intent.agent);
-      superRef.current = intent;
-      setSupervising(intent);
+      const res = await terminalSupervise(intent.goal, intent.agent);
+      // The server keeps your real objective (from the briefing) over the raw
+      // trigger phrase — show that on the bar.
+      const active: Supervising = { agent: intent.agent, goal: res.goal || intent.goal };
+      superRef.current = active;
+      setSupervising(active);
       const line = `On it. I'm watching your terminal and I'll answer ${intent.agent}'s permission prompts — approving what's safe and on-task, declining anything risky.`;
       say("jardo", line);
       if (spoken) {
@@ -232,7 +267,8 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       {supervising && (
         <div className="supervising-bar">
           <span className="pulse" />
-          Supervising <strong>{supervising.agent}</strong> — {supervising.goal}
+          Supervising <strong>{supervising.agent}</strong>
+          {supervising.goal ? ` — ${supervising.goal}` : " in your terminal"}
           <button className="link-btn" onClick={stopSupervising}>
             stop
           </button>

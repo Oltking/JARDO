@@ -507,6 +507,8 @@ async def terminal_supervise(request: WatchStartRequest,
     from core.memory import MemoryStore
     from core.supervision import start_session
 
+    from core.supervision import get_active
+
     owner = await MemoryStore(session).get_owner()
     if owner is None:
         raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
@@ -518,10 +520,23 @@ async def terminal_supervise(request: WatchStartRequest,
             detail=f"Can't read a terminal to supervise ({exc}). Open Terminal.app "
                    "with your agent running, then ask me again.",
         ) from exc
-    await start_session(session, owner.id, request.goal.strip(), agent=request.agent)
+
+    # The command that triggers this ("supervise it", "keep clicking yes") is
+    # rarely the actual goal — that was set at the briefing. Keep the existing
+    # objective; only set a new one if the owner gave something substantive and
+    # none is active yet.
+    active = await get_active(session, owner.id)
+    goal = request.goal.strip()
+    substantive = len(goal.split()) >= 5
+    if active is None:
+        await start_session(session, owner.id, goal if substantive else "",
+                            agent=request.agent)
+        objective = goal if substantive else ""
+    else:
+        objective = active.objective
     await session.commit()
     app.state.answered_prompts = set()  # fresh dedupe per session
-    return {"watching": True, "goal": request.goal.strip(), "agent": request.agent}
+    return {"watching": True, "goal": objective, "agent": request.agent}
 
 
 @app.post("/terminal/tick")
