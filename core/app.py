@@ -79,6 +79,22 @@ async def _require_token(request, call_next):
     return await call_next(request)
 
 
+def _premium_frontdoor(decision: RouteDecision, cloud_ready: bool) -> RouteDecision:
+    """Jardo's own replies are its face. When a cloud key exists, don't let the
+    tiny local model answer the owner — upgrade the conversation to a solid cloud
+    tier (the owner chose "premium when a key is set"). Bulk/agent work keeps
+    routing by cost elsewhere; this only rescues the weak local path."""
+    if not cloud_ready or decision.backend != "ollama":
+        return decision
+    tiers = RouterConfig.load().tiers
+    model = tiers.get("fireworks_mid") or tiers.get("fireworks_cheap",
+                                                    "fireworks/gpt-oss-20b")
+    return RouteDecision(
+        "fireworks", model, decision.task_label, est_cost_usd=0.0,
+        alternative_cost_usd=0.0, saved_usd=0.0, floor="premium-frontdoor",
+        reason="front-door upgraded to premium (cloud key set)")
+
+
 async def _dispatch(decision: RouteDecision, messages: list[dict]):
     """Route a chat to the decided backend. Cloud providers (Fireworks, AMD) both
     speak the OpenAI-compatible protocol, so one client serves both; core.inference
@@ -689,6 +705,8 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
         )
     except BudgetExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+    decision = _premium_frontdoor(decision, cloud_ready=bool(providers.configured()))
 
     # Cost optimization (§5): serve from the response cache when we've answered
     # this exact request before — zero tokens, and free on the paid tiers.
