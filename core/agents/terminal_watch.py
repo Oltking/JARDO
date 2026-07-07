@@ -138,6 +138,15 @@ def _osa(*lines: str) -> str:
     return result.stdout
 
 
+def open_interactive(shell_command: str) -> None:
+    """Open a new visible Terminal window and start `shell_command` in it, then
+    return immediately (unlike RealTerminal.run, which waits for completion). Used
+    to launch an interactive coding agent the owner and Jardo both watch."""
+    esc = shell_command.replace("\\", "\\\\").replace('"', '\\"')
+    _osa('tell application "Terminal" to activate',
+         f'tell application "Terminal" to do script "{esc}"')
+
+
 def read_front_terminal() -> str:
     """Passive read of the front Terminal tab's text. Types nothing, runs
     nothing — it cannot disturb the owner's work."""

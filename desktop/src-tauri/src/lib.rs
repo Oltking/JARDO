@@ -281,6 +281,25 @@ async fn choose_project() -> Result<serde_json::Value, ApiError> {
 }
 
 #[tauri::command]
+async fn start_project(
+    goal: String,
+    agent: String,
+    name: Option<String>,
+    location: Option<String>,
+    existing_path: Option<String>,
+) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/projects/start", core_base()))
+        .json(&serde_json::json!({
+            "goal": goal, "agent": agent, "name": name,
+            "location": location, "existing_path": existing_path,
+        }))
+        .timeout(std::time::Duration::from_secs(60))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn where_am_i(path: Option<String>) -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .post(format!("{}/projects/whereami", core_base()))
@@ -605,6 +624,7 @@ pub fn run() {
             get_projects_root,
             set_projects_root,
             choose_project,
+            start_project,
             where_am_i,
             terminal_supervise,
             terminal_tick,

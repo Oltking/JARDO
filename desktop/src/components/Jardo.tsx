@@ -3,6 +3,8 @@ import {
   chooseProject,
   getIdentity,
   sendChat,
+  setProjectsRoot,
+  startProject,
   terminalSupervise,
   terminalTick,
   voiceSay,
@@ -95,6 +97,22 @@ function quickAnswer(text: string, name: string | null): string | null {
     return "Say “where am I?” and I'll pick up where you left off, or “supervise Claude in my terminal” and I'll answer the agent's permission prompts for you. You can also just ask me things.";
   if (/^(hi|hey|hello|yo|hiya|hey jardo|good morning|good evening)\b/.test(t) && t.length < 20)
     return name ? `Hi ${name} — what are we working on?` : "Hi — what are we working on?";
+  return null;
+}
+
+// "Build me an X / create a new project / spin up a website with gemini" →
+// onboard a fresh project and hand it to a coding agent.
+function parseNewProject(text: string): Supervising | null {
+  const t = text.toLowerCase();
+  const build = /\b(build|create|make|start|scaffold|set ?up|spin ?up)\b/.test(t);
+  const thing =
+    /\b(project|website|web ?app|app|application|api|tool|bot|game|dashboard|landing ?page|site|script|cli|library)\b/.test(t);
+  // "start supervising" etc. is NOT a new project — that's handled elsewhere.
+  const isSupervise = /\b(supervise|superwise|watch|oversee)\b/.test(t);
+  if (build && thing && !isSupervise) {
+    const agent = /gemini/.test(t) ? "gemini" : "claude";
+    return { goal: text, agent };
+  }
   return null;
 }
 
@@ -201,6 +219,14 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       return;
     }
 
+    if (!superRef.current) {
+      const project = parseNewProject(msg);
+      if (project) {
+        await startNewProject(project, spoken);
+        return;
+      }
+    }
+
     const intent = parseSupervise(msg);
     if (intent) {
       if (superRef.current) {
@@ -290,6 +316,45 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       const err = e as ApiError;
       // 409 from choose = the owner cancelled the picker; stay quiet.
       if (err.status !== 409) setError(err.message || "Couldn't check the project.");
+    } finally {
+      setPhase("idle");
+    }
+  }
+
+  // ---- new-project onboarding conductor -------------------------------------
+  async function startNewProject(intent: Supervising, spoken: boolean) {
+    setPhase("thinking");
+    try {
+      let res = await startProject(intent.goal, intent.agent);
+      if (res.needs_root) {
+        const ask = "First, where should I keep your projects? Pick the folder that holds them.";
+        say("jardo", ask);
+        if (spoken) await speak(ask);
+        await setProjectsRoot(null); // native folder chooser
+        res = await startProject(intent.goal, intent.agent);
+      }
+      if (res.ok) {
+        const where = res.launched
+          ? `I created ${res.name} and started ${intent.agent} on it in your terminal. I'm watching it now — I'll answer its prompts.`
+          : `I created ${res.name} and set it up, but couldn't open the terminal. Open it and run ${intent.agent} in that folder, then I'll supervise.`;
+        say("jardo", where);
+        if (spoken) {
+          setPhase("speaking");
+          await speak(where);
+        }
+        if (res.launched) {
+          const active: Supervising = { agent: intent.agent, goal: res.goal || intent.goal };
+          superRef.current = active;
+          setSupervising(active);
+        }
+      }
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status !== 409 || !(err.message || "").includes("chosen")) {
+        const line = err.message || "I couldn't start that project.";
+        say("jardo", line);
+        if (spoken) await speak(line);
+      }
     } finally {
       setPhase("idle");
     }

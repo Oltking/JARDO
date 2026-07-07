@@ -313,6 +313,70 @@ async def projects_whereami(body: WhereAmIRequest,
     return answer
 
 
+class StartProjectRequest(BaseModel):
+    goal: str
+    agent: str = "claude"
+    name: str | None = None
+    location: str | None = None      # parent dir; defaults to the projects root
+    existing_path: str | None = None  # resume/onboard an existing folder instead
+
+
+@app.post("/projects/start")
+async def projects_start(body: StartProjectRequest,
+                         session: AsyncSession = Depends(get_session)) -> dict:
+    """Onboard a project and hand it to a coding agent: scaffold (or reuse) the
+    folder, brief the agent, record it, and launch the agent in a real terminal
+    that Jardo then supervises."""
+    from core.agents import onboard, terminal_watch
+    from core.agents.adapters import get_adapter
+    from core import appsettings
+    from core.projects import ProjectStore
+    from core.supervision import start_session
+
+    owner = await MemoryStore(session).get_owner()
+    if owner is None:
+        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
+    if not body.goal.strip():
+        raise HTTPException(status_code=400, detail="Tell me what to build.")
+
+    adapter = get_adapter(body.agent)
+    if adapter is None or not adapter.installed():
+        raise HTTPException(
+            status_code=409,
+            detail=f"{body.agent} isn't installed (its CLI isn't on PATH).")
+
+    if body.existing_path:
+        path = os.path.abspath(os.path.expanduser(body.existing_path))
+        if not os.path.isdir(path):
+            raise HTTPException(status_code=409, detail=f"No folder at {path}.")
+        name, created = os.path.basename(path), False
+    else:
+        parent = body.location or appsettings.get("projects_root")
+        if not parent:
+            return {"needs_root": True}  # UI prompts the owner to pick a root
+        proj = onboard.scaffold_project(parent, body.name or onboard.derive_name(body.goal),
+                                        body.goal, body.agent)
+        path, name, created = proj.path, proj.name, proj.created
+
+    await ProjectStore(session).upsert(owner.id, path, name=name, goal=body.goal.strip())
+    await start_session(session, owner.id, body.goal.strip(), agent=body.agent)
+    await MemoryStore(session).audit("jardo", "project.started",
+                                     {"path": path, "agent": body.agent,
+                                      "goal": body.goal.strip()[:300], "created": created})
+    app.state.answered_prompts = set()
+    await session.commit()
+
+    launched = True
+    try:
+        terminal_watch.open_interactive(
+            onboard.launch_shell(adapter.cli, path, body.agent))
+    except Exception:  # noqa: BLE001 — folder is ready even if the launch fails
+        launched = False
+
+    return {"ok": True, "path": path, "name": name, "goal": body.goal.strip(),
+            "agent": body.agent, "created": created, "launched": launched}
+
+
 @app.get("/memory")
 async def list_memory(session: AsyncSession = Depends(get_session)) -> list[dict]:
     store = MemoryStore(session)

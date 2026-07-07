@@ -169,6 +169,36 @@ export async function whereAmI(path: string | null): Promise<WhereAmI> {
   }
 }
 
+export interface StartProjectResult {
+  ok?: boolean;
+  needs_root?: boolean;
+  path?: string;
+  name?: string;
+  goal?: string;
+  agent?: string;
+  created?: boolean;
+  launched?: boolean;
+}
+
+export async function startProject(
+  goal: string,
+  agent: string,
+  name: string | null = null,
+  location: string | null = null
+): Promise<StartProjectResult> {
+  try {
+    return await invoke<StartProjectResult>("start_project", {
+      goal,
+      agent,
+      name,
+      location,
+      existingPath: null,
+    });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 export async function chooseProject(): Promise<{ path: string }> {
   try {
     return await invoke<{ path: string }>("choose_project");
