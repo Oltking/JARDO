@@ -32,6 +32,18 @@ class PermissionPrompt:
     numbered: bool       # numbered menu (key alone confirms) vs (y/n) (needs return)
 
 
+_BORDER_CHARS = "│┃╎┆┇┊┋╏|┌┐└┘├┤┬┴┼─━╭╮╰╯╱╲╳ \t"
+
+
+def _strip_borders(line: str) -> str:
+    """Remove TUI box borders and the ❯ selection cursor from both ends of a
+    line, so "│ ❯ 1. Yes │" becomes "1. Yes" (the cursor is re-added as an
+    optional prefix the option regex already tolerates)."""
+    line = line.strip(_BORDER_CHARS)
+    line = re.sub(r"^[❯>*•]\s*", "", line)  # drop a leading selection cursor
+    return line
+
+
 # Questions a coding agent asks before doing something. Kept broad but anchored
 # on the "do you want / proceed / allow / apply" shapes Claude Code and Gemini use.
 _QUESTION = re.compile(
@@ -52,8 +64,10 @@ def detect_permission_prompt(text: str) -> PermissionPrompt | None:
     """
     if not text:
         return None
-    # Only consider the tail: a real prompt sits at the bottom, waiting.
-    tail = "\n".join(text.splitlines()[-40:])
+    # Only consider the tail: a real prompt sits at the bottom, waiting. Claude
+    # Code draws its dialog inside a box ("│ ❯ 1. Yes │"), so strip the border
+    # decorations first or the option lines won't match.
+    tail = "\n".join(_strip_borders(ln) for ln in text.splitlines()[-40:])
 
     q = _QUESTION.search(tail)
     if not q:

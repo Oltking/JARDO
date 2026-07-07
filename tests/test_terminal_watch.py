@@ -40,6 +40,28 @@ ORDINARY_OUTPUT = """\
 """
 
 
+CLAUDE_BOXED = """\
+╭──────────────────────────────────────────────────────────────╮
+│ Bash command                                                 │
+│ rm -rf build && npm run build                                │
+│                                                              │
+│ Do you want to proceed?                                      │
+│ ❯ 1. Yes                                                     │
+│   2. Yes, and don't ask again for npm commands               │
+│   3. No, and tell Claude what to do differently (esc)        │
+╰──────────────────────────────────────────────────────────────╯
+"""
+
+
+def test_detects_boxed_prompt_despite_tui_borders():
+    p = detect_permission_prompt(CLAUDE_BOXED)
+    assert p is not None, "must see through Claude's box-drawing border"
+    assert p.numbered is True
+    assert p.approve_key == "1"
+    assert p.deny_key == "3"
+    assert "npm run build" in p.action
+
+
 def test_detects_bash_prompt_and_extracts_command():
     p = detect_permission_prompt(CLAUDE_BASH)
     assert p is not None
