@@ -116,6 +116,18 @@ function parseNewProject(text: string): Supervising | null {
   return null;
 }
 
+function isAffirmative(text: string): boolean {
+  return /^(yes|yeah|yep|yup|sure|ok|okay|go|go ahead|do it|confirm|please do|start|create it|make it|let'?s do it|proceed|correct)\b/.test(
+    text.trim().toLowerCase()
+  );
+}
+
+function isNegative(text: string): boolean {
+  return /^(no|nope|cancel|stop|don'?t|nah|never ?mind|forget it|not now|wait)\b/.test(
+    text.trim().toLowerCase()
+  );
+}
+
 function wantsStop(text: string): boolean {
   return /\b(stop|pause|that'?s enough|stand down|never ?mind|cancel|hold on)\b/.test(
     text.toLowerCase()
@@ -145,6 +157,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const runningRef = useRef(false);
   const convRef = useRef<string | null>(null);
   const superRef = useRef<Supervising | null>(null);
+  const pendingRef = useRef<Supervising | null>(null); // onboarding awaiting a yes
   const scrollRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
@@ -196,6 +209,24 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     if (!msg) return;
     say("you", msg);
 
+    // A side-effectful action (creating a project + launching an agent) is
+    // waiting on a yes/no — resolve that before anything else (audit #1).
+    if (pendingRef.current) {
+      const p = pendingRef.current;
+      pendingRef.current = null;
+      if (isAffirmative(msg)) {
+        await startNewProject(p, spoken);
+        return;
+      }
+      if (isNegative(msg)) {
+        const line = "Okay, cancelled.";
+        say("jardo", line);
+        if (spoken) await speak(line);
+        return;
+      }
+      // Neither yes nor no — drop the pending action and handle this as new input.
+    }
+
     if (superRef.current && wantsStop(msg)) {
       stopSupervising();
       const line = "Okay — I've stopped watching your terminal.";
@@ -222,7 +253,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     if (!superRef.current) {
       const project = parseNewProject(msg);
       if (project) {
-        await startNewProject(project, spoken);
+        // Don't scaffold + spawn an agent off one utterance — confirm first.
+        pendingRef.current = project;
+        const line = `Start a new ${project.agent === "gemini" ? "Gemini" : "Claude"} project for that and set it up in your terminal? Say yes to go ahead.`;
+        say("jardo", line);
+        if (spoken) await speak(line);
         return;
       }
     }
@@ -398,8 +433,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   useEffect(() => {
     if (!supervising) return;
     let alive = true;
+    let busy = false; // never let a slow tick overlap the next — double-press guard
     const timer = setInterval(async () => {
-      if (!alive || !superRef.current) return;
+      if (!alive || !superRef.current || busy) return;
+      busy = true;
       try {
         const r = await terminalTick();
         if (!r.watching) {
@@ -419,6 +456,8 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         }
       } catch {
         /* transient — keep watching */
+      } finally {
+        busy = false;
       }
     }, 2000);
     return () => {

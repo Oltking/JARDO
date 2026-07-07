@@ -138,41 +138,70 @@ def _osa(*lines: str) -> str:
     return result.stdout
 
 
-def open_interactive(shell_command: str) -> None:
-    """Open a new visible Terminal window and start `shell_command` in it, then
-    return immediately (unlike RealTerminal.run, which waits for completion). Used
-    to launch an interactive coding agent the owner and Jardo both watch."""
-    esc = shell_command.replace("\\", "\\\\").replace('"', '\\"')
+def _target(window_id: int | None) -> str:
+    return (f"selected tab of window id {window_id}" if window_id is not None
+            else "selected tab of front window")
+
+
+def front_window_id() -> int | None:
+    """The id of Terminal's frontmost window, or None if there isn't one."""
+    try:
+        out = _osa('tell application "Terminal" to id of front window').strip()
+    except RuntimeError:
+        return None
+    return int(out) if out.lstrip("-").isdigit() else None
+
+
+def is_frontmost(window_id: int | None) -> bool:
+    return window_id is not None and front_window_id() == window_id
+
+
+def open_interactive(shell_command: str) -> int | None:
+    """Open a new visible Terminal window running `shell_command`, and return its
+    window id so supervision can pin to exactly this terminal. Returns immediately
+    (unlike RealTerminal.run). The command goes through a temp script so there's
+    no fragile inline AppleScript/shell escaping."""
+    import os
+    import tempfile
+    import uuid
+
+    path = os.path.join(tempfile.gettempdir(), f"jardo_launch_{uuid.uuid4().hex[:8]}.sh")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("#!/bin/bash\n" + shell_command + "\n")
+    os.chmod(path, 0o755)
     _osa('tell application "Terminal" to activate',
-         f'tell application "Terminal" to do script "{esc}"')
+         f'tell application "Terminal" to do script "bash {path}"')
+    return front_window_id()  # the new window is now frontmost
+
+
+def read_terminal(window_id: int | None = None) -> str:
+    """Passive read of a Terminal tab's text (types nothing, runs nothing). Pins
+    to `window_id` when given, so supervision reads exactly the terminal it's
+    watching even if the owner brings another window forward."""
+    return _osa(f'tell application "Terminal" to get contents of {_target(window_id)}')
 
 
 def read_front_terminal() -> str:
-    """Passive read of the front Terminal tab's text. Types nothing, runs
-    nothing — it cannot disturb the owner's work."""
-    return _osa(
-        'tell application "Terminal" to get contents of selected tab of front window'
-    )
+    return read_terminal(None)
 
 
 class AccessibilityDenied(RuntimeError):
     """System Events keystroke was blocked — the owner must grant Accessibility."""
 
 
-def press_answer(prompt: PermissionPrompt, approve: bool) -> None:
-    """Answer the yes/no prompt in the front terminal.
+def press_answer(prompt: PermissionPrompt, approve: bool,
+                 window_id: int | None = None) -> None:
+    """Answer the yes/no prompt in the supervised terminal.
 
-    Preferred path: deliver the keypress through Terminal's OWN Apple Events —
-    the same Automation permission the passive read already uses — which types
-    the key straight into the agent's stdin without needing Accessibility rights
-    and without permanently stealing focus. Falls back to a System Events
-    keystroke (which does need Accessibility) only if that fails.
+    Preferred path: deliver the keypress through Terminal's OWN Apple Events into
+    the PINNED window — the same Automation permission the read uses. This types
+    the key straight into that agent's stdin, needs no Accessibility rights, and
+    doesn't steal focus (we target the window by id, not "the front app"). Falls
+    back to a System Events keystroke only if that fails.
     """
     key = prompt.approve_key if approve else prompt.deny_key
     try:
-        # `do script … in <tab>` writes the characters into that tab's session.
-        _osa(f'tell application "Terminal" to do script "{key}" '
-             'in selected tab of front window')
+        _osa(f'tell application "Terminal" to do script "{key}" in {_target(window_id)}')
         return
     except RuntimeError:
         pass  # fall through to the keystroke path

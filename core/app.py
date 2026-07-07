@@ -79,19 +79,31 @@ async def _require_token(request, call_next):
     return await call_next(request)
 
 
-def _premium_frontdoor(decision: RouteDecision, cloud_ready: bool) -> RouteDecision:
+def _premium_frontdoor(decision: RouteDecision, cloud_ready: bool,
+                       input_tokens: int = 0) -> RouteDecision:
     """Jardo's own replies are its face. When a cloud key exists, don't let the
     tiny local model answer the owner — upgrade the conversation to a solid cloud
     tier (the owner chose "premium when a key is set"). Bulk/agent work keeps
-    routing by cost elsewhere; this only rescues the weak local path."""
+    routing by cost elsewhere; this only rescues the weak local path.
+
+    The upgrade is priced (audit #5) so it counts against the daily budget instead
+    of being logged as free — otherwise the cost ceiling would never trip on chat."""
     if not cloud_ready or decision.backend != "ollama":
         return decision
-    tiers = RouterConfig.load().tiers
-    model = tiers.get("fireworks_mid") or tiers.get("fireworks_cheap",
-                                                    "fireworks/gpt-oss-20b")
+    config = RouterConfig.load()
+    model = config.tiers.get("fireworks_mid") or config.tiers.get(
+        "fireworks_cheap", "fireworks/gpt-oss-20b")
+    est = 0.0
+    try:
+        from core.router.pricing import estimate_cost_usd, load_pricing
+        pricing = load_pricing()
+        if model in pricing:
+            est = estimate_cost_usd(pricing[model], input_tokens, config.est_output_tokens)
+    except Exception:  # noqa: BLE001 — pricing missing → fall back to 0, still routes
+        pass
     return RouteDecision(
-        "fireworks", model, decision.task_label, est_cost_usd=0.0,
-        alternative_cost_usd=0.0, saved_usd=0.0, floor="premium-frontdoor",
+        "fireworks", model, decision.task_label, est_cost_usd=est,
+        alternative_cost_usd=est, saved_usd=0.0, floor="premium-frontdoor",
         reason="front-door upgraded to premium (cloud key set)")
 
 
@@ -345,6 +357,14 @@ async def projects_start(body: StartProjectRequest,
             status_code=409,
             detail=f"{body.agent} isn't installed (its CLI isn't on PATH).")
 
+    # No ungated execution (spec §0.3): the launch goes through the Sentinel
+    # decider like every other action Jardo takes (audit #8).
+    from core.autonomy.decider import autonomous_decision
+    gate = await autonomous_decision(
+        session, f"{adapter.cli} (start build: {body.goal.strip()})", body.goal.strip())
+    if not gate.approve:
+        raise HTTPException(status_code=409, detail=f"Refused: {gate.reason}")
+
     if body.existing_path:
         path = os.path.abspath(os.path.expanduser(body.existing_path))
         if not os.path.isdir(path):
@@ -368,7 +388,8 @@ async def projects_start(body: StartProjectRequest,
 
     launched = True
     try:
-        terminal_watch.open_interactive(
+        # Pin supervision to the new window so we watch exactly this terminal.
+        app.state.supervise_window_id = terminal_watch.open_interactive(
             onboard.launch_shell(adapter.cli, path, body.agent))
     except Exception:  # noqa: BLE001 — folder is ready even if the launch fails
         launched = False
@@ -705,6 +726,9 @@ async def terminal_supervise(request: WatchStartRequest,
         objective = active.objective
     await session.commit()
     app.state.answered_prompts = set()  # fresh dedupe per session
+    # Pin to the terminal that's frontmost right now, so we read/press exactly
+    # this window even if the owner brings another one forward (audit #2).
+    app.state.supervise_window_id = terminal_watch.front_window_id()
     return {"watching": True, "goal": objective, "agent": request.agent}
 
 
@@ -717,7 +741,7 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     import hashlib
 
     from core.agents import terminal_watch
-    from core.autonomy.decider import autonomous_decision
+    from core.autonomy.decider import Decision, autonomous_decision
     from core.memory import MemoryStore
     from core.supervision import get_active
 
@@ -725,8 +749,9 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     if active is None:
         return {"watching": False}
 
+    window_id = getattr(app.state, "supervise_window_id", None)
     try:
-        screen = terminal_watch.read_front_terminal()
+        screen = terminal_watch.read_terminal(window_id)
     except Exception as exc:  # noqa: BLE001
         return {"watching": True, "readable": False, "detail": str(exc)}
 
@@ -752,13 +777,19 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
             [{"role": "user", "content": p}])
         return r.content
 
-    chat_fn = _align if await app.state.ollama.is_up() else None
-    decision = await autonomous_decision(session, prompt.action, active.objective,
-                                         chat_fn=chat_fn)
+    # Fail safe (audit #4): if we couldn't confidently isolate the command being
+    # asked about, decline rather than approve on a misread.
+    if not prompt.action.strip():
+        decision = Decision(False, "couldn't read the command clearly — declined "
+                            "to be safe", "low")
+    else:
+        chat_fn = _align if await app.state.ollama.is_up() else None
+        decision = await autonomous_decision(session, prompt.action, active.objective,
+                                             chat_fn=chat_fn)
     pressed = False
     needs_accessibility = False
     try:
-        terminal_watch.press_answer(prompt, decision.approve)
+        terminal_watch.press_answer(prompt, decision.approve, window_id)
         pressed = True
     except terminal_watch.AccessibilityDenied:
         needs_accessibility = True
@@ -895,7 +926,8 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     except BudgetExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
 
-    decision = _premium_frontdoor(decision, cloud_ready=bool(providers.configured()))
+    decision = _premium_frontdoor(decision, cloud_ready=bool(providers.configured()),
+                                  input_tokens=input_tokens)
 
     # Cost optimization (§5): serve from the response cache when we've answered
     # this exact request before — zero tokens, and free on the paid tiers.

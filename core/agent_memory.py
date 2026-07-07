@@ -18,6 +18,10 @@ from pathlib import Path
 
 CLAUDE_PROJECTS = Path.home() / ".claude" / "projects"
 
+# Cache resolved project_path → transcript dir so the fallback scan (which opens
+# every project's newest transcript) runs at most once per path (audit #7).
+_DIR_CACHE: dict[str, Path] = {}
+
 
 @dataclass
 class AgentMemory:
@@ -51,13 +55,18 @@ def _first_cwd(jsonl: Path) -> str | None:
 
 
 def _find_dir(project_path: str) -> Path | None:
+    cached = _DIR_CACHE.get(project_path)
+    if cached is not None and cached.is_dir():
+        return cached
     direct = CLAUDE_PROJECTS / _encode(project_path)
     if direct.is_dir():
+        _DIR_CACHE[project_path] = direct
         return direct
     if not CLAUDE_PROJECTS.is_dir():
         return None
     # Fallback: the dash-encoding is ambiguous for exotic paths, so match on the
-    # `cwd` Claude records inside each project's newest transcript.
+    # `cwd` Claude records inside each project's newest transcript. Runs once per
+    # path — the result is cached above.
     try:
         target = str(Path(project_path).resolve())
     except OSError:
@@ -70,6 +79,7 @@ def _find_dir(project_path: str) -> Path | None:
         if sessions and (cwd := _first_cwd(sessions[0])):
             try:
                 if str(Path(cwd).resolve()) == target:
+                    _DIR_CACHE[project_path] = d
                     return d
             except OSError:
                 continue
