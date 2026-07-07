@@ -35,6 +35,7 @@ postgres-data/
 
 # Private source material — spec, notes, and the vendor doc harvest stay local (owner policy)
 *.md
+!README.md
 docs/
 evals/scores.json
 .run/
