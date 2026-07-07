@@ -92,6 +92,12 @@ def test_ignores_ordinary_output():
     assert detect_permission_prompt("just some logs\nmore logs\n") is None
 
 
+def test_question_without_options_or_yn_does_not_fire():
+    # Prose that merely contains a question must never trigger a keypress.
+    prose = "● I could refactor this. Do you want me to explain the approach first?"
+    assert detect_permission_prompt(prose) is None
+
+
 def test_only_looks_at_the_tail():
     # An old prompt far up the scrollback, with lots of work since, must not fire.
     stale = CLAUDE_BASH + "\n" + ("● working…\n" * 60)

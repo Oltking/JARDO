@@ -64,35 +64,39 @@ def detect_permission_prompt(text: str) -> PermissionPrompt | None:
     """
     if not text:
         return None
-    # Only consider the tail: a real prompt sits at the bottom, waiting. Claude
-    # Code draws its dialog inside a box ("│ ❯ 1. Yes │"), so strip the border
+    # Only the last handful of lines — a real prompt sits at the bottom, waiting
+    # for a keypress. Looking further up invites false positives on old output.
+    # Claude draws its dialog inside a box ("│ ❯ 1. Yes │"), so strip the border
     # decorations first or the option lines won't match.
-    tail = "\n".join(_strip_borders(ln) for ln in text.splitlines()[-40:])
+    tail = "\n".join(_strip_borders(ln) for ln in text.splitlines()[-18:])
 
     q = _QUESTION.search(tail)
-    if not q:
-        # A bare (y/n) at the very end also counts.
+    if q:
+        options = _OPTION.findall(tail[q.start():])
+        if options:
+            approve = _match_option(options, ("yes",), prefer_narrowest=True)
+            deny = _match_option(options, ("no", "cancel", "reject"),
+                                 prefer_narrowest=False)
+            if approve is None or deny is None:
+                return None
+            action = _preceding_action(tail, q.start())
+            return PermissionPrompt(action, q.group(0).strip(), approve_key=approve,
+                                    deny_key=deny, numbered=True)
+        # A question plus an explicit (y/n) marker is the only other real prompt.
         if _YN.search(tail):
-            action = _preceding_action(tail, tail.rfind("("))
-            return PermissionPrompt(action, tail.strip().splitlines()[-1],
+            action = _preceding_action(tail, q.start())
+            return PermissionPrompt(action, q.group(0).strip(),
                                     approve_key="y", deny_key="n", numbered=False)
+        # A question with neither numbered options nor (y/n) is just prose —
+        # never press a key on that.
         return None
 
-    options = _OPTION.findall(tail[q.start():])
-    if options:
-        approve = _match_option(options, ("yes",), prefer_narrowest=True)
-        deny = _match_option(options, ("no", "cancel", "reject"),
-                             prefer_narrowest=False)
-        if approve is None or deny is None:
-            return None
-        action = _preceding_action(tail, q.start())
-        return PermissionPrompt(action, q.group(0).strip(), approve_key=approve,
-                                deny_key=deny, numbered=True)
-
-    # Question with no numbered options → treat as y/n.
-    action = _preceding_action(tail, q.start())
-    return PermissionPrompt(action, q.group(0).strip(),
-                            approve_key="y", deny_key="n", numbered=False)
+    # A bare (y/n) at the very end also counts even without a "do you want" line.
+    if _YN.search(tail):
+        action = _preceding_action(tail, tail.rfind("("))
+        return PermissionPrompt(action, tail.strip().splitlines()[-1],
+                                approve_key="y", deny_key="n", numbered=False)
+    return None
 
 
 def _match_option(options: list[tuple[str, str]], words: tuple[str, ...],
@@ -142,13 +146,37 @@ def read_front_terminal() -> str:
     )
 
 
+class AccessibilityDenied(RuntimeError):
+    """System Events keystroke was blocked — the owner must grant Accessibility."""
+
+
 def press_answer(prompt: PermissionPrompt, approve: bool) -> None:
-    """Press the yes/no key in the front terminal. Numbered menus confirm on the
-    digit; (y/n) needs a return. Uses System Events, so Terminal comes forward
-    briefly — the owner's session and its contents are untouched."""
+    """Answer the yes/no prompt in the front terminal.
+
+    Preferred path: deliver the keypress through Terminal's OWN Apple Events —
+    the same Automation permission the passive read already uses — which types
+    the key straight into the agent's stdin without needing Accessibility rights
+    and without permanently stealing focus. Falls back to a System Events
+    keystroke (which does need Accessibility) only if that fails.
+    """
     key = prompt.approve_key if approve else prompt.deny_key
+    try:
+        # `do script … in <tab>` writes the characters into that tab's session.
+        _osa(f'tell application "Terminal" to do script "{key}" '
+             'in selected tab of front window')
+        return
+    except RuntimeError:
+        pass  # fall through to the keystroke path
+
     lines = ['tell application "Terminal" to activate',
              f'tell application "System Events" to keystroke "{key}"']
     if not prompt.numbered:
         lines.append('tell application "System Events" to key code 36')  # Return
-    _osa(*lines)
+    try:
+        _osa(*lines)
+    except RuntimeError as exc:
+        if "1002" in str(exc) or "not allowed to send keystrokes" in str(exc):
+            raise AccessibilityDenied(
+                "Grant Jardo Accessibility permission (System Settings → Privacy "
+                "& Security → Accessibility) so it can press the answer.") from exc
+        raise

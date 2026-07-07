@@ -586,23 +586,28 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     chat_fn = _align if await app.state.ollama.is_up() else None
     decision = await autonomous_decision(session, prompt.action, active.objective,
                                          chat_fn=chat_fn)
+    pressed = False
+    needs_accessibility = False
     try:
         terminal_watch.press_answer(prompt, decision.approve)
         pressed = True
-    except Exception as exc:  # noqa: BLE001 — couldn't inject; tell the owner
-        pressed = False
-        decision = type(decision)(decision.approve,
-                                  f"{decision.reason} (couldn't press: {exc})",
-                                  decision.severity)
+    except terminal_watch.AccessibilityDenied:
+        needs_accessibility = True
+    except Exception:  # noqa: BLE001 — couldn't inject this time; try again next tick
+        pass
 
-    answered.add(fingerprint)
+    # Only remember it as handled once we actually pressed — otherwise we retry
+    # on the next tick (e.g. after the owner grants Accessibility).
+    if pressed:
+        answered.add(fingerprint)
     await MemoryStore(session).audit(
         "jardo", "terminal.answered",
         {"action": prompt.action[:300], "approved": decision.approve,
          "reason": decision.reason, "pressed": pressed})
     await session.commit()
     return {"watching": True, "readable": True, "prompt": True,
-            "answered": True, "approved": decision.approve, "pressed": pressed,
+            "answered": pressed, "approved": decision.approve, "pressed": pressed,
+            "needs_accessibility": needs_accessibility,
             "action": prompt.action, "reason": decision.reason,
             "answer": prompt.approve_key if decision.approve else prompt.deny_key,
             "tail": tail}

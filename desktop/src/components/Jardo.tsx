@@ -34,7 +34,10 @@ interface Supervising {
 // watching when the owner meant it than to drop the request into the chat model.
 const CLAUDE = /\b(claude|cloud|claud|clod|glaude|clawed)\b/;
 const AGENT_WORDS = /\b(terminal|gemini|codex|cursor|agent|prompt|prompts|permission|permissions)\b/;
-const STRONG_VERB = /\b(supervise|superwise|supavise|oversee|monitor)\b/;
+// "supervise" is a word STT loves to mangle — match every spelling we've seen it
+// return, including the two-word ones ("super vice", "super wise", "superverse").
+const STRONG_VERB =
+  /\b(supervise|supervised|supervising|supervisor|superwise|supavise|superverse|supervice)\b|\bsuper\s?(vice|vise|wise|verse|advise|advice)\b/;
 // Softer "just do the clicking" phrasings the owner actually uses out loud.
 const SOFT_VERB = /\b(watch|keep an eye|handle|take over|answer|click|clicking|press|pressing|approve|approving|accept|accepting|confirm|allow|say yes|go through)\b/;
 const YES_WORDS = /\b(yes|yeah|proceed|approve|accept|allow|permission)\b/;
@@ -82,11 +85,14 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [needsAccess, setNeedsAccess] = useState(false);
 
   const runningRef = useRef(false);
   const convRef = useRef<string | null>(null);
   const superRef = useRef<Supervising | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const speakingRef = useRef(false);
+  const suppressUntilRef = useRef(0);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
@@ -94,6 +100,20 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     });
+  }
+
+  // Speak, but muffle the mic while we do it (and for a moment after) so Jardo
+  // never hears its own voice and answers itself.
+  async function speak(text: string) {
+    speakingRef.current = true;
+    try {
+      await voiceSay(text);
+    } catch {
+      /* no voice — fine */
+    } finally {
+      speakingRef.current = false;
+      suppressUntilRef.current = Date.now() + 900; // ignore the tail echo
+    }
   }
 
   useEffect(() => {
@@ -119,7 +139,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       stopSupervising();
       const line = "Okay — I've stopped watching your terminal.";
       say("jardo", line);
-      if (spoken) voiceSay(line).catch(() => undefined);
+      if (spoken) await speak(line);
       return;
     }
 
@@ -130,7 +150,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         // restart, and never send this to the chat model.
         const line = `Still on it — I'm watching your terminal and handling ${superRef.current.agent}'s prompts.`;
         say("jardo", line);
-        if (spoken) voiceSay(line).catch(() => undefined);
+        if (spoken) await speak(line);
         return;
       }
       await startSupervising(intent, spoken);
@@ -149,7 +169,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       say("jardo", reply.reply);
       if (spoken) {
         setPhase("speaking");
-        await voiceSay(reply.reply).catch(() => undefined);
+        await speak(reply.reply);
       }
     } catch (e) {
       const err = e as ApiError;
@@ -174,6 +194,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         const heard = await voiceTranscribe(6);
         if (!runningRef.current) break;
         if (!heard.heard || !heard.transcript.trim()) continue; // silence → keep listening
+        // Drop anything captured while (or just after) Jardo was speaking — that's
+        // Jardo hearing itself, not the owner.
+        if (speakingRef.current || Date.now() < suppressUntilRef.current) continue;
         await handle(heard.transcript, true);
       }
     } catch (e) {
@@ -198,7 +221,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       say("jardo", line);
       if (spoken) {
         setPhase("speaking");
-        await voiceSay(line).catch(() => undefined);
+        await speak(line);
       }
     } catch (e) {
       const err = e as ApiError;
@@ -207,7 +230,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           ? "I couldn't find a terminal to watch. Open Terminal with your agent running, then ask me again."
           : err.message || "I couldn't start supervising.";
       say("jardo", line);
-      if (spoken) voiceSay(line).catch(() => undefined);
+      if (spoken) await speak(line);
     } finally {
       setPhase("idle");
     }
@@ -230,10 +253,16 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           stopSupervising();
           return;
         }
+        if (r.needs_accessibility) {
+          setNeedsAccess(true);
+          return;
+        }
         if (r.answered && r.action) {
+          setNeedsAccess(false);
           const verb = r.approved ? "Approved" : "Declined";
-          say("event", `${verb}: ${r.action}${r.reason ? ` — ${r.reason}` : ""}`, r.approved);
-          voiceSay(`${verb}. ${r.action}`.slice(0, 120)).catch(() => undefined);
+          const action = r.action.length > 90 ? r.action.slice(0, 90) + "…" : r.action;
+          say("event", `${verb} · ${action}`, r.approved);
+          await speak(`${verb}. ${action}`);
         }
       } catch {
         /* transient — keep watching */
@@ -278,6 +307,13 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       {needsSetup && (
         <div className="banner warn" role="alert">
           Jardo isn't set up yet. Run <code>jardo setup</code>, then talk to me.
+        </div>
+      )}
+      {needsAccess && (
+        <div className="banner warn" role="alert">
+          I can read your terminal but I'm blocked from pressing the answer. Grant
+          Jardo <strong>Accessibility</strong> in System Settings → Privacy &
+          Security → Accessibility, then I'll take it from there.
         </div>
       )}
       {error && (

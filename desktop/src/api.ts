@@ -132,6 +132,7 @@ export interface TickResult {
   answered?: boolean;
   approved?: boolean;
   pressed?: boolean;
+  needs_accessibility?: boolean;
   already?: boolean;
   action?: string;
   reason?: string;
