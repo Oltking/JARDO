@@ -900,6 +900,37 @@ async def supervise(request: SuperviseRequest,
     }
 
 
+class RouteRequest(BaseModel):
+    message: str
+
+
+@app.post("/assistant/route")
+async def assistant_route(body: RouteRequest) -> dict:
+    """The tool-use layer: let the model decide what the owner wants (understanding,
+    not keyword regex). Only trusted when a capable cloud model is configured —
+    otherwise we return fallback:true so the desktop uses its offline heuristics,
+    which are more reliable than the tiny local model for this."""
+    from core.assistant import build_messages, parse_intent
+
+    msg = body.message.strip()
+    if not msg:
+        return {"intent": "chat"}
+    if not providers.configured():
+        return {"intent": "chat", "fallback": True}  # no capable model → use regex
+
+    chosen = providers.configured()[0]
+    tiers = RouterConfig.load().tiers
+    model = tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")  # routing is cheap
+    try:
+        client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
+                                 timeout=30)
+        result = await client.chat(providers.resolve_model(chosen, model),
+                                    build_messages(msg), max_tokens=80, temperature=0.0)
+        return parse_intent(result.content)
+    except Exception:  # noqa: BLE001 — router failed → let the desktop fall back
+        return {"intent": "chat", "fallback": True}
+
+
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session)) -> ChatResponse:
     store = MemoryStore(session)

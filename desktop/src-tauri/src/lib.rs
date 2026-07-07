@@ -201,6 +201,16 @@ async fn send_chat(
 }
 
 #[tauri::command]
+async fn route_intent(message: String) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/assistant/route", core_base()))
+        .json(&serde_json::json!({ "message": message }))
+        .timeout(std::time::Duration::from_secs(35))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn get_providers() -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .get(format!("{}/settings/providers", core_base()))
@@ -622,6 +632,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             health,
             send_chat,
+            route_intent,
             get_providers,
             set_provider,
             get_identity,

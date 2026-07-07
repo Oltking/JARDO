@@ -123,6 +123,23 @@ export async function setProvider(
   }
 }
 
+// ---- Intent routing (the tool-use layer) ----------------------------------
+
+export interface RoutedIntent {
+  intent: "resume" | "supervise" | "new_project" | "stop" | "chat";
+  agent?: string;
+  goal?: string;
+  fallback?: boolean; // true → no capable model; caller should use its heuristics
+}
+
+export async function routeIntent(message: string): Promise<RoutedIntent> {
+  try {
+    return await invoke<RoutedIntent>("route_intent", { message });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Identity + Projects (spec §1, §4.5) ----------------------------------
 
 export interface Identity {

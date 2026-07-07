@@ -3,7 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 import {
   chooseProject,
   getIdentity,
+  routeIntent,
   sendChat,
+  type RoutedIntent,
   setProjectsRoot,
   startProject,
   terminalSupervise,
@@ -263,34 +265,59 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       }
     }
 
-    if (wantsWhereAmI(msg)) {
-      await doWhereAmI(spoken);
-      return;
-    }
-
-    if (!superRef.current) {
-      const project = parseNewProject(msg);
-      if (project) {
-        // Don't scaffold + spawn an agent off one utterance — confirm first.
-        pendingRef.current = project;
-        const line = `Start a new ${project.agent === "gemini" ? "Gemini" : "Claude"} project for that and set it up in your terminal? Say yes to go ahead.`;
-        say("jardo", line);
-        if (spoken) await speak(line);
-        return;
+    // Understand intent with the model (the tool-use layer). If there's no
+    // capable model, or the router is unreachable, fall back to offline
+    // heuristics — which is also the no-key path, so behaviour never regresses.
+    let action: RoutedIntent["intent"] = "chat";
+    let agent = "claude";
+    let goal = msg;
+    try {
+      const routed = await routeIntent(msg);
+      if (routed.fallback) throw new Error("fallback");
+      action = routed.intent;
+      if (routed.agent) agent = routed.agent;
+      if (routed.goal) goal = routed.goal;
+    } catch {
+      if (wantsWhereAmI(msg)) action = "resume";
+      else if (!superRef.current && parseNewProject(msg)) {
+        const p = parseNewProject(msg)!;
+        action = "new_project";
+        agent = p.agent;
+        goal = p.goal;
+      } else if (parseSupervise(msg)) {
+        action = "supervise";
+        agent = parseSupervise(msg)!.agent;
       }
     }
 
-    const intent = parseSupervise(msg);
-    if (intent) {
+    if (action === "resume") {
+      await doWhereAmI(spoken);
+      return;
+    }
+    if (action === "supervise") {
       if (superRef.current) {
-        // Already watching — the owner is just reaffirming. Reassure, don't
-        // restart, and never send this to the chat model.
+        // Already watching — the owner is just reaffirming. Reassure, don't restart.
         const line = `Still on it — I'm watching your terminal and handling ${superRef.current.agent}'s prompts.`;
         say("jardo", line);
         if (spoken) await speak(line);
         return;
       }
-      await startSupervising(intent, spoken);
+      await startSupervising({ goal: msg, agent }, spoken);
+      return;
+    }
+    if (action === "new_project" && !superRef.current) {
+      // Don't scaffold + spawn an agent off one utterance — confirm first.
+      pendingRef.current = { goal, agent };
+      const line = `Start a new ${agent === "gemini" ? "Gemini" : "Claude"} project for that and set it up in your terminal? Say yes to go ahead.`;
+      say("jardo", line);
+      if (spoken) await speak(line);
+      return;
+    }
+    if (action === "stop" && superRef.current) {
+      stopSupervising();
+      const line = "Okay — I've stopped watching your terminal.";
+      say("jardo", line);
+      if (spoken) await speak(line);
       return;
     }
 
