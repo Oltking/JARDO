@@ -9,7 +9,6 @@ from core.voice import denoise
 def test_denoise_is_noop_without_the_dep(monkeypatch):
     # Force the "not installed" path.
     monkeypatch.setattr(denoise, "_UNAVAILABLE", True)
-    monkeypatch.setattr(denoise, "_MODEL", None)
     audio = (np.random.default_rng(0).integers(-2000, 2000, 1600)).astype(np.int16)
     out = denoise.denoise(audio)
     assert out.dtype == np.int16

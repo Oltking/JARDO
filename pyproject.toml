@@ -42,10 +42,10 @@ voice = [
     "openwakeword>=0.4.0",
     "sounddevice>=0.5.5",
 ]
-# Optional neural noise suppression (DeepFilterNet). Heavier (pulls torch), so
-# it's a separate opt-in extra: uv sync --extra denoise
+# Optional noise suppression (noisereduce — MIT, numpy-2 compatible, no torch).
+# Separate opt-in extra: uv sync --extra denoise
 denoise = [
-    "deepfilternet>=0.5.6",
+    "noisereduce>=3.0.0",
     "scipy>=1.13",
 ]
 

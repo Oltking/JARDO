@@ -240,7 +240,7 @@ def denoise_test(seconds: float = 5.0) -> None:
     from core.voice.stt import SpeechToText
 
     if not dn.available():
-        console.print("[yellow]DeepFilterNet isn't installed. Run: "
+        console.print("[yellow]noise suppression isn't installed. Run: "
                       "uv sync --extra denoise[/yellow]")
         raise typer.Exit(1)
 
