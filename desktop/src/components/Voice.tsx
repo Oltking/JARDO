@@ -11,14 +11,22 @@ import {
 
 // Voice panel (spec §8). A continuous conversation: once started it keeps
 // listening → answering → listening until you stop it, so you can ask follow-up
-// questions without tapping again. Optional hands-free mode waits for the wake
-// word ("hey Jardo") before each turn. An amplitude meter surfaces mic trouble.
+// questions without tapping again. With `autoStart` it comes up already
+// listening the moment the app is open (always-on), and stays mounted across
+// tabs so it keeps hearing you even while you're elsewhere in the app. Optional
+// hands-free mode waits for the wake word ("hey Jardo") before each turn. An
+// amplitude meter surfaces mic trouble.
 type Phase = "idle" | "waking" | "listening" | "thinking" | "speaking";
 
 const LOW_SIGNAL = 0.02;
 const CLIPPING = 0.98;
 
-export function Voice() {
+interface VoiceProps {
+  autoStart?: boolean;  // begin listening on mount (always-on)
+  hidden?: boolean;     // keep the loop running but render nothing (off-tab)
+}
+
+export function Voice({ autoStart = false, hidden = false }: VoiceProps = {}) {
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [handsFree, setHandsFree] = useState(false);
@@ -34,11 +42,21 @@ export function Voice() {
   useEffect(() => {
     voiceStatus().then(setStatus).catch((e: ApiError) => setError(e.message));
     return () => {
-      runningRef.current = false; // stop the loop if the tab unmounts
+      runningRef.current = false; // stop the loop if the component unmounts
     };
   }, []);
 
-  async function loop(withWake: boolean) {
+  // Always-on: start listening as soon as the app is up (after the launch
+  // briefing hands off). Persistent means silence never ends the session — it
+  // loops straight back to listening, so Jardo is always ready for the next word.
+  useEffect(() => {
+    if (autoStart && status?.available && !runningRef.current) {
+      loop(false, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, status?.available]);
+
+  async function loop(withWake: boolean, persistent = false) {
     if (runningRef.current) return;
     runningRef.current = true;
     setError(null);
@@ -71,7 +89,9 @@ export function Voice() {
           setPhase("speaking");
           await voiceSay(chat.reply);
         }
-        // Tap-to-talk ends after silence; hands-free returns to waiting.
+        // Always-on keeps listening; hands-free returns to waiting for the wake
+        // word; plain tap-to-talk stops after the silence timeout.
+        if (persistent) continue;
         if (!withWake) break;
       }
     } catch (e) {
@@ -104,6 +124,10 @@ export function Voice() {
   const selectedName = status?.input_devices?.find(
     (d) => d.index === status.selected_device
   )?.name;
+
+  // Off-tab: keep the always-on loop alive (hooks above still run) but show
+  // nothing. The little indicator lives in the StatusBar instead.
+  if (hidden) return null;
 
   if (status && !status.available) {
     return (

@@ -18,6 +18,7 @@ import sys
 _ACCOUNT = "jardo"
 
 FIREWORKS_API_KEY = "jardo.fireworks_api_key"
+AMD_API_KEY = "jardo.amd_api_key"
 DEVICE_PRIVATE_KEY = "jardo.device_private_key"
 TOTP_SECRET = "jardo.totp_secret"
 

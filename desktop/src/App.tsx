@@ -10,9 +10,10 @@ import { Reports } from "./components/Reports";
 import { Build } from "./components/Build";
 import { Splash } from "./components/Splash";
 import { Briefing } from "./components/Briefing";
+import { Settings } from "./components/Settings";
 import { killSwitch } from "./api";
 
-type Tab = "chat" | "voice" | "build" | "agents" | "reports" | "approvals";
+type Tab = "chat" | "voice" | "build" | "agents" | "reports" | "approvals" | "settings";
 
 // Does the spoken goal look like a "build something" request?
 function isBuildRequest(goal: string): boolean {
@@ -132,15 +133,24 @@ export default function App() {
         >
           Approvals
         </button>
+        <button
+          className={tab === "settings" ? "tab active" : "tab"}
+          onClick={() => setTab("settings")}
+        >
+          Settings
+        </button>
       </nav>
 
       <main className="content">
         {tab === "chat" && <Chat />}
-        {tab === "voice" && <Voice />}
         {tab === "build" && <Build seed={buildSeed} />}
         {tab === "agents" && <Agents />}
         {tab === "reports" && <Reports />}
         {tab === "approvals" && <Approvals />}
+        {tab === "settings" && <Settings />}
+        {/* Always mounted so listening stays alive across tabs; auto-starts once
+            the launch briefing hands off (always-on voice). */}
+        <Voice autoStart={briefingDone} hidden={tab !== "voice"} />
       </main>
     </div>
   );

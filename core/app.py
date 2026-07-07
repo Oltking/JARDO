@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import secrets
 from core.config import settings
 from core.db import engine, get_session
+from core.inference import providers
 from core.inference.fireworks import FireworksClient, FireworksError
 from core.inference.ollama import OllamaClient, OllamaUnavailable
 from core.memory import MemoryStore
@@ -79,31 +80,28 @@ async def _require_token(request, call_next):
 
 
 async def _dispatch(decision: RouteDecision, messages: list[dict]):
-    """Route a chat to the decided backend. vLLM speaks the OpenAI-compatible
-    protocol (docs/vendor/local-inference/vllm-openai-compatible-server.md), so
-    it reuses FireworksClient pointed at the droplet endpoint."""
+    """Route a chat to the decided backend. Cloud providers (Fireworks, AMD) both
+    speak the OpenAI-compatible protocol, so one client serves both; core.inference
+    .providers picks whichever key the owner configured and falls back gracefully
+    so a missing key degrades instead of 500ing (spec §5)."""
     if decision.backend == "ollama":
         return await app.state.ollama.chat(decision.model, messages)
-    if decision.backend == "vllm":
-        client = FireworksClient("vllm-local", app.state.router._config.vllm_endpoint,
-                                 timeout=settings.request_timeout_seconds)
-        return await client.chat(decision.model, messages)
-    api_key = secrets.read_secret(secrets.FIREWORKS_API_KEY)
-    if not api_key:
+
+    # A vLLM route means AMD; anything else means Fireworks. If the intended
+    # provider isn't ready, fall back to any other configured provider so the
+    # owner never hits a dead end just because one key is missing.
+    intended = "amd" if decision.backend == "vllm" else "fireworks"
+    order = [intended] + [p for p in providers.configured() if p != intended]
+    chosen = next((p for p in order if providers.is_ready(p)), None)
+    if chosen is None:
         raise HTTPException(
             status_code=409,
-            detail="Route chose Fireworks but no API key is in the Keychain "
-                   "(QUESTIONS.md Q1). Local tip: install Ollama for key-free chat.",
+            detail="No cloud provider is configured. Add a Fireworks or AMD key in "
+                   "Settings → Providers. Local tip: install Ollama for key-free chat.",
         )
-    client = FireworksClient(api_key, settings.fireworks_base_url,
+    client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                              timeout=settings.request_timeout_seconds)
-    # Fireworks model ids in PRICING_TABLE.md are short ("fireworks/x");
-    # the API wants "accounts/fireworks/models/x"
-    # (docs/vendor/fireworks/querying-text-models.md).
-    model = decision.model
-    if model.startswith("fireworks/"):
-        model = "accounts/fireworks/models/" + model.removeprefix("fireworks/")
-    return await client.chat(model, messages)
+    return await client.chat(providers.resolve_model(chosen, decision.model), messages)
 
 
 class ChatRequest(BaseModel):
@@ -164,6 +162,34 @@ async def decide_approval(approval_id: uuid.UUID, decision: ApprovalDecision,
         raise HTTPException(status_code=404, detail="Not found or already decided")
     await session.commit()
     return {"id": str(result.id), "status": result.status}
+
+
+# ---- Provider settings (spec §5) — paste a Fireworks or AMD key; Jardo uses
+# whichever is configured. Keys go straight to the Keychain, never echoed back.
+
+class ProviderKeyRequest(BaseModel):
+    api_key: str | None = None
+    base_url: str | None = None  # AMD endpoint (URL, not a secret)
+
+
+@app.get("/settings/providers")
+async def get_providers() -> dict:
+    return {"providers": providers.status(), "active": providers.configured()}
+
+
+@app.post("/settings/providers/{name}")
+async def set_provider(name: str, body: ProviderKeyRequest) -> dict:
+    if name not in providers.PROVIDERS:
+        raise HTTPException(status_code=404, detail=f"unknown provider {name!r}")
+    if body.api_key and body.api_key.strip():
+        try:
+            secrets.write_secret(providers.PROVIDERS[name].secret_service,
+                                 body.api_key.strip())
+        except secrets.SecretsUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if body.base_url is not None:
+        providers.set_base_url(name, body.base_url)
+    return {"providers": providers.status(), "active": providers.configured()}
 
 
 @app.get("/memory")

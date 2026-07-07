@@ -201,6 +201,31 @@ async fn send_chat(
 }
 
 #[tauri::command]
+async fn get_providers() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/settings/providers", core_base()))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn set_provider(
+    name: String,
+    api_key: Option<String>,
+    base_url: Option<String>,
+) -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/settings/providers/{}", core_base(), name))
+        .json(&serde_json::json!({ "api_key": api_key, "base_url": base_url }))
+        .send()
+        .await
+        .map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn get_memory() -> Result<Vec<MemoryItem>, ApiError> {
     let resp = client()?
         .get(format!("{}/memory", core_base()))
@@ -482,6 +507,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             health,
             send_chat,
+            get_providers,
+            set_provider,
             get_memory,
             get_approvals,
             decide_approval,

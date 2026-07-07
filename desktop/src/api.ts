@@ -88,6 +88,41 @@ export async function getMemory(): Promise<MemoryItem[]> {
   return invoke<MemoryItem[]>("get_memory");
 }
 
+// ---- Providers (spec §5) — paste a Fireworks or AMD key; Jardo uses it. ----
+
+export interface ProviderStatus {
+  name: string;
+  label: string;
+  has_key: boolean;
+  base_url: string;
+  ready: boolean;
+}
+
+export interface ProvidersInfo {
+  providers: ProviderStatus[];
+  active: string[];
+}
+
+export async function getProviders(): Promise<ProvidersInfo> {
+  try {
+    return await invoke<ProvidersInfo>("get_providers");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
+export async function setProvider(
+  name: string,
+  apiKey: string | null,
+  baseUrl: string | null
+): Promise<ProvidersInfo> {
+  try {
+    return await invoke<ProvidersInfo>("set_provider", { name, apiKey, baseUrl });
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Voice (spec §8) ------------------------------------------------------
 
 export interface VoiceInputDevice {

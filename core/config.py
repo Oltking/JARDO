@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     # Source: docs/vendor/fireworks/quickstart-serverless.md
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
 
+    # AMD (self-hosted vLLM on MI300X) — also OpenAI-compatible, so it reuses the
+    # same client; only base_url + key differ. Empty until the owner points Jardo
+    # at their droplet (Settings → Providers, or JARDO_AMD_BASE_URL). The endpoint
+    # is a URL, not a secret; the key lives in the Keychain (secrets.AMD_API_KEY).
+    amd_base_url: str = ""
+    amd_model: str = "vllm-large"  # model id served by the vLLM endpoint
+
     # Default chat model = proposed cheap tier (QUESTIONS.md Q4, pending eval
     # validation in Phase 2). Model id format per
     # docs/vendor/fireworks/querying-text-models.md ("accounts/<org>/models/<name>").
