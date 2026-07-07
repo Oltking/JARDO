@@ -61,7 +61,8 @@ async def get_cached(session: AsyncSession, model: str, messages: list[dict]) ->
 
 
 async def put_cached(session: AsyncSession, model: str, messages: list[dict],
-                     response: str, per_call_tokens: int) -> None:
+                     response: str, per_call_tokens: int,
+                     store_embedding: bool = False) -> None:
     key = cache_key(model, messages)
     exists = (await session.execute(
         select(ResponseCache.id).where(ResponseCache.cache_key == key)
@@ -76,18 +77,24 @@ async def put_cached(session: AsyncSession, model: str, messages: list[dict],
     session.add(ResponseCache(cache_key=key, model=model, request_preview=preview,
                               response=response, per_call_tokens=per_call_tokens, hits=0))
     await session.flush()
-    # Store the query embedding for semantic reuse (no-op if no embedding model).
-    vec = await embed(_query_text(messages))
-    if vec:
-        await session.execute(
-            text("UPDATE response_cache SET embedding = :v WHERE cache_key = :k"),
-            {"v": to_pgvector(vec), "k": key})
+    # Only store the query embedding for semantic-eligible (single-shot) calls, so
+    # context-dependent multi-turn entries can never be semantically cross-matched.
+    if store_embedding:
+        vec = await embed(_query_text(messages))
+        if vec:
+            await session.execute(
+                text("UPDATE response_cache SET embedding = CAST(:v AS vector) "
+                     "WHERE cache_key = :k"),
+                {"v": to_pgvector(vec), "k": key})
 
 
 async def semantic_get(session: AsyncSession, model: str,
                        messages: list[dict]) -> tuple[str, int] | None:
     """Find a cached answer to a *similar* prior query (same model) via pgvector.
-    Returns (response, tokens_saved) or None. Skipped if no embedding model."""
+    Returns (response, tokens_saved) or None. Skipped if no embedding model.
+
+    Only entries stored with an embedding (single-shot calls) are candidates, so
+    this is safe to use for stateless calls only (alignment, classification)."""
     query = _query_text(messages)
     if not query:
         return None
@@ -96,7 +103,7 @@ async def semantic_get(session: AsyncSession, model: str,
         return None
     row = (await session.execute(
         text("SELECT id, response, per_call_tokens, "
-             "(embedding <=> :v) AS dist FROM response_cache "
+             "(embedding <=> CAST(:v AS vector)) AS dist FROM response_cache "
              "WHERE model = :m AND embedding IS NOT NULL "
              "ORDER BY dist ASC LIMIT 1"),
         {"v": to_pgvector(vec), "m": model})).first()
@@ -109,10 +116,16 @@ async def semantic_get(session: AsyncSession, model: str,
 
 
 async def cached_call(session: AsyncSession, model: str, messages: list[dict],
-                      miss_fn: Callable[[], Awaitable[tuple[str, int]]]) -> CachedResult:
+                      miss_fn: Callable[[], Awaitable[tuple[str, int]]],
+                      allow_semantic: bool = False) -> CachedResult:
     """Return a cached response if present, else call miss_fn() -> (text, tokens)
-    and store it. Zero tokens on a hit."""
-    # 1. Exact hit.
+    and store it. Zero tokens on a hit.
+
+    allow_semantic: only pass True for STATELESS single-shot calls (a similar
+    prior question is a safe reuse). Multi-turn / contextual calls must leave it
+    False — otherwise a similarly-worded latest message could return a
+    context-wrong answer."""
+    # 1. Exact hit (always safe — keyed on the full message list).
     hit = await get_cached(session, model, messages)
     if hit is not None:
         key = cache_key(model, messages)
@@ -120,14 +133,16 @@ async def cached_call(session: AsyncSession, model: str, messages: list[dict],
             select(ResponseCache).where(ResponseCache.cache_key == key)
         )).scalar_one()
         return CachedResult(hit, True, row.per_call_tokens)
-    # 2. Semantic hit — a similar prior question (pgvector).
-    sem = await semantic_get(session, model, messages)
-    if sem is not None:
-        response, tokens_saved = sem
-        return CachedResult(response, True, tokens_saved)
-    # 3. Miss — run the real call and store it (with its embedding).
+    # 2. Semantic hit — only for stateless calls (opt-in).
+    if allow_semantic:
+        sem = await semantic_get(session, model, messages)
+        if sem is not None:
+            response, tokens_saved = sem
+            return CachedResult(response, True, tokens_saved)
+    # 3. Miss — run the real call and store it.
     response, tokens = await miss_fn()
-    await put_cached(session, model, messages, response, tokens)
+    await put_cached(session, model, messages, response, tokens,
+                     store_embedding=allow_semantic)
     return CachedResult(response, False, 0)
 
 

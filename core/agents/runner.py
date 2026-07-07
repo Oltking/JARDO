@@ -88,6 +88,15 @@ async def conduct(session: AsyncSession, instruction: str, agent_key: str,
         return AgentRun(True, agent_key, workspace.as_dict(), command, model=model,
                         note="planned (not run)", warnings=warnings)
 
+    # Gate the agent launch itself through the Sentinel (§0.3 — no ungated
+    # execution). The command is constructed, but this closes the path entirely.
+    from core.autonomy.decider import autonomous_decision
+    decision = await autonomous_decision(
+        session, f"{adapter.cli} (build task: {instruction})", instruction)
+    if not decision.approve:
+        return AgentRun(False, agent_key, workspace.as_dict(), command, model=model,
+                        note=f"refused: {decision.reason}", warnings=warnings)
+
     # Write the prompt to a file (avoids quoting the spec) and run the agent in a
     # VISIBLE terminal so the owner can watch it work.
     import tempfile
@@ -99,7 +108,7 @@ async def conduct(session: AsyncSession, instruction: str, agent_key: str,
         prompt_file = pf.name
     shell_cmd = adapter.build_shell_command(
         prompt_file, resume and adapter.supports_resume, model)
-    result = await launch_visible(shell_cmd, str(workspace.path), timeout)
+    result = await launch_visible(shell_cmd, command, str(workspace.path), timeout)
     try:
         os.remove(prompt_file)
     except OSError:

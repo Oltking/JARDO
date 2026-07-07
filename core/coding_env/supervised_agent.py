@@ -37,9 +37,10 @@ class SupervisedAgent:
         )
         review = await self._sentinel.review(request)
         token = decide_answer(match, review.verdict)
+        from core.sentinel.checks import redact
         await self._store.audit("supervised-agent", "prompt.answered", {
-            "prompt": match.prompt_line[:200],
-            "action": match.proposed_action[:200],
+            "prompt": redact(match.prompt_line[:200]),
+            "action": redact(match.proposed_action[:200]),
             "verdict": review.verdict,
             "answered": token,
         })

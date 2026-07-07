@@ -24,6 +24,15 @@ def _supervise_url() -> str:
     return f"{base}/supervise"
 
 
+def _read_token():
+    try:
+        path = os.path.join(os.path.expanduser("~"), ".jardo", "api_token")
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
 def main() -> int:
     try:
         event = json.load(sys.stdin)
@@ -35,9 +44,12 @@ def main() -> int:
         "tool_name": event.get("tool_name", ""),
         "tool_input": event.get("tool_input", {}) or {},
     }).encode()
+    headers = {"Content-Type": "application/json"}
+    token = _read_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(
-        _supervise_url(), data=payload,
-        headers={"Content-Type": "application/json"}, method="POST",
+        _supervise_url(), data=payload, headers=headers, method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:

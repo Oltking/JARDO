@@ -58,6 +58,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Shared bearer token gates every request except health + CORS preflight, so a
+# stray local process can't drive Jardo (finding #2). Legit clients read the
+# same token file (core/api_auth).
+from fastapi.responses import JSONResponse  # noqa: E402
+
+from core.api_auth import get_or_create_token  # noqa: E402
+
+_API_TOKEN = get_or_create_token()
+_AUTH_EXEMPT = {"/healthz"}
+
+
+@app.middleware("http")
+async def _require_token(request, call_next):
+    if request.method == "OPTIONS" or request.url.path in _AUTH_EXEMPT:
+        return await call_next(request)
+    if request.headers.get("authorization", "") != f"Bearer {_API_TOKEN}":
+        return JSONResponse({"detail": "unauthorized"}, status_code=401)
+    return await call_next(request)
+
 
 async def _dispatch(decision: RouteDecision, messages: list[dict]):
     """Route a chat to the decided backend. vLLM speaks the OpenAI-compatible
@@ -485,11 +504,19 @@ async def supervise(request: SuperviseRequest,
 
     # Alignment judging uses the local model when available (supervision is a
     # critical decision; upgrades to the quality tier once a Fireworks key exists).
+    # These judgments repeat, so they go through the cache (semantic ok: single-shot).
+    from core.cache import cached_call
+
     async def _align(prompt: str) -> str:
         local_model = RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b")
-        result = await app.state.ollama.chat(
-            local_model, [{"role": "user", "content": prompt}])
-        return result.content
+        msgs = [{"role": "user", "content": prompt}]
+
+        async def _miss() -> tuple[str, int]:
+            r = await app.state.ollama.chat(local_model, msgs)
+            return r.content, (r.prompt_tokens or 0) + (r.completion_tokens or 0)
+
+        res = await cached_call(session, local_model, msgs, _miss, allow_semantic=True)
+        return res.content
 
     chat_fn = _align if await app.state.ollama.is_up() else None
     decision = await supervise_tool_call(

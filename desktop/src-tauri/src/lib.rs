@@ -23,6 +23,16 @@ fn core_base() -> String {
     std::env::var("JARDO_CORE_URL").unwrap_or_else(|_| "http://127.0.0.1:8000".to_string())
 }
 
+/// Read the shared API token (written by the core to ~/.jardo/api_token).
+fn api_token() -> Option<String> {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .ok()?;
+    std::fs::read_to_string(std::path::Path::new(&home).join(".jardo").join("api_token"))
+        .ok()
+        .map(|s| s.trim().to_string())
+}
+
 /// Error surfaced to the frontend. `status` mirrors the HTTP status code so the
 /// UI can special-case 409 (not set up), 429 (budget), 502 (model), etc.
 #[derive(Debug, Serialize)]
@@ -41,7 +51,14 @@ impl ApiError {
 }
 
 fn client() -> Result<reqwest::Client, ApiError> {
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(token) = api_token() {
+        if let Ok(value) = format!("Bearer {token}").parse() {
+            headers.insert(reqwest::header::AUTHORIZATION, value);
+        }
+    }
     reqwest::Client::builder()
+        .default_headers(headers)
         .build()
         .map_err(ApiError::transport)
 }

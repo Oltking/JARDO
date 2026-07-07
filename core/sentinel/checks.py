@@ -33,6 +33,16 @@ _SECRET_PATTERNS = [
 _PLAINTEXT_HTTP = re.compile(r"\bhttp://(?!127\.0\.0\.1|localhost)", re.I)
 
 
+def redact(text: str) -> str:
+    """Mask credential-shaped substrings before persisting to the audit log
+    (SECURITY.md — never store secrets, even in logs)."""
+    if not text:
+        return text
+    for pattern, _label in _SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED]", text)
+    return text
+
+
 def scan_dangerous_patterns(request: ActionRequest) -> list[Finding]:
     text = f"{request.target}\n{request.payload}"
     findings = []

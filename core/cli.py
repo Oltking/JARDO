@@ -26,6 +26,12 @@ console = Console()
 _BASE = f"http://{settings.api_host}:{settings.api_port}"
 
 
+def _auth_headers() -> dict:
+    from core.api_auth import read_token
+    token = read_token()
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 @app.command()
 def setup() -> None:
     """First-run setup: per-user identity record + Fireworks key into the Keychain."""
@@ -101,7 +107,7 @@ def chat() -> None:
         if conversation_id:
             payload["conversation_id"] = conversation_id
         try:
-            response = httpx.post(f"{_BASE}/chat", json=payload,
+            response = httpx.post(f"{_BASE}/chat", json=payload, headers=_auth_headers(),
                                   timeout=settings.request_timeout_seconds + 10)
         except httpx.ConnectError:
             console.print(f"[red]Core not reachable at {_BASE}. Run: uv run jardo serve[/red]")
@@ -120,7 +126,7 @@ def chat() -> None:
 @app.command()
 def facts() -> None:
     """Show persistent memory."""
-    response = httpx.get(f"{_BASE}/memory", timeout=10)
+    response = httpx.get(f"{_BASE}/memory", headers=_auth_headers(), timeout=10)
     if response.status_code != 200:
         console.print(f"[red]{response.json().get('detail', response.text)}[/red]")
         raise typer.Exit(1)
@@ -382,7 +388,7 @@ def listen() -> None:
 
     def chat_fn(text: str) -> str:
         console.print(f"[cyan]you said:[/cyan] {text}")
-        resp = httpx.post(f"{_BASE}/chat", json={"message": text},
+        resp = httpx.post(f"{_BASE}/chat", json={"message": text}, headers=_auth_headers(),
                           timeout=settings.request_timeout_seconds + 10)
         if resp.status_code != 200:
             return resp.json().get("detail", "I could not reach the core.")
@@ -406,7 +412,7 @@ def voice() -> None:
     from core.voice.wakeword import WhisperWakeDetector
 
     def chat_fn(text: str) -> str:
-        resp = httpx.post(f"{_BASE}/chat", json={"message": text},
+        resp = httpx.post(f"{_BASE}/chat", json={"message": text}, headers=_auth_headers(),
                           timeout=settings.request_timeout_seconds + 10)
         return resp.json().get("reply", "…") if resp.status_code == 200 else \
             resp.json().get("detail", "core unreachable")
@@ -617,7 +623,7 @@ def new(request: str = typer.Argument(""), dir: str = ".") -> None:
     agent = "claude"
     while True:
         try:
-            resp = _httpx.post(f"{_BASE}/build/intake",
+            resp = _httpx.post(f"{_BASE}/build/intake", headers=_auth_headers(),
                                json={"message": message, "session_id": session_id},
                                timeout=settings.request_timeout_seconds + 10)
         except _httpx.ConnectError:
@@ -630,7 +636,7 @@ def new(request: str = typer.Argument(""), dir: str = ".") -> None:
         if data["ready"]:
             console.print(f"\n[dim]Brief:[/dim]\n{data.get('brief', '')}\n")
             if typer.confirm(f"Run {agent} on this in {dir}?", default=False):
-                run = _httpx.post(f"{_BASE}/build/run",
+                run = _httpx.post(f"{_BASE}/build/run", headers=_auth_headers(),
                                   json={"session_id": session_id, "directory": dir,
                                         "run": True},
                                   timeout=1200).json()

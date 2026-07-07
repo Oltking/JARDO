@@ -23,13 +23,17 @@ class LaunchResult:
     visible: bool
 
 
-async def launch_visible(command: str, cwd: str, timeout: float = 900.0) -> LaunchResult:
+async def launch_visible(command: str, argv: list[str], cwd: str,
+                         timeout: float = 900.0) -> LaunchResult:
+    """command: shell string for the visible-terminal paths (run inside a script,
+    never via a Python shell=True). argv: the same invocation as a list, used by
+    the headless fallback so it runs without a shell."""
     system = platform.system()
     if system == "Darwin":
         return await _macos(command, cwd, timeout)
     if system == "Windows":  # pragma: no cover (built here, exercised on Windows)
         return _windows(command, cwd, timeout)
-    return _headless(command, cwd, timeout)
+    return _headless(argv, cwd, timeout)
 
 
 async def _macos(command: str, cwd: str, timeout: float) -> LaunchResult:
@@ -62,10 +66,11 @@ def _windows(command: str, cwd: str, timeout: float) -> LaunchResult:  # pragma:
     return LaunchResult(output[-4000:], None, visible=True)
 
 
-def _headless(command: str, cwd: str, timeout: float) -> LaunchResult:
+def _headless(argv: list[str], cwd: str, timeout: float) -> LaunchResult:
+    # No shell — run the argv directly (no shell=True, no injection surface).
     try:
-        proc = subprocess.run(command, shell=True, cwd=cwd, capture_output=True,
-                              text=True, timeout=timeout)
+        proc = subprocess.run(argv, cwd=cwd, capture_output=True, text=True,
+                              timeout=timeout)
     except subprocess.TimeoutExpired:
         return LaunchResult("(timed out)", None, visible=False)
     return LaunchResult(((proc.stdout or "") + (proc.stderr or ""))[-4000:],

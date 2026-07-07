@@ -108,10 +108,11 @@ class Sentinel:
         return Verdict.APPROVE if prior else Verdict.ESCALATE
 
     async def _record(self, review: ActionReview) -> None:
+        from core.sentinel.checks import redact
         detail = {
             "actor": review.request.actor,
             "action_type": review.request.action_type,
-            "target": review.request.target[:500],
+            "target": redact(review.request.target[:500]),
             "verdict": review.verdict,
             "severity": review.severity,
             "tier": review.tier,

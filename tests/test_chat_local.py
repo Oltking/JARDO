@@ -7,7 +7,7 @@ otherwise, so the suite stays green on machines without it."""
 import httpx
 import pytest
 
-from core.app import app
+from core.app import _API_TOKEN, app
 from core.db import get_session
 from core.inference.ollama import OllamaClient
 from core.router.router import RouterConfig
@@ -42,7 +42,8 @@ async def test_chat_end_to_end_via_local_model(session, local_model_ready):
                                      base_url="http://test") as client:
             async with app.router.lifespan_context(app):
                 response = await client.post(
-                    "/chat", json={"message": "Reply with exactly the word pong."})
+                    "/chat", json={"message": "Reply with exactly the word pong."},
+                    headers={"Authorization": f"Bearer {_API_TOKEN}"})
         assert response.status_code == 200, response.text
         data = response.json()
         assert data["reply"].strip()

@@ -100,7 +100,7 @@ async def test_conduct_runs_visibly_and_captures(session, tmp_path, monkeypatch)
     # Stub the visible launcher so the test doesn't open a real terminal window.
     from core.agents.terminal_launch import LaunchResult
 
-    async def fake_launch(command, cwd, timeout=900.0):
+    async def fake_launch(command, argv, cwd, timeout=900.0):
         import subprocess
         out = subprocess.run(command, shell=True, cwd=cwd, capture_output=True, text=True)
         return LaunchResult(out.stdout, out.returncode, visible=True)

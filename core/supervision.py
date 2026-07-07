@@ -89,8 +89,12 @@ def _heuristic_alignment(objective: str, action: str) -> Alignment:
     if overlap:
         return Alignment(True, f"shares terms with objective: {sorted(overlap)[:4]}",
                          "heuristic")
-    # No overlap is a weak signal only — don't hard-fail benign actions offline.
-    return Alignment(True, "no model available; not enough signal to flag", "heuristic")
+    # No model to verify AND no lexical overlap → flag it rather than silently
+    # approve. Callers act on this conservatively: the interactive supervisor
+    # escalates to the owner; the autonomous decider refuses (better to skip a
+    # legit step than run an off-task one unverified while the owner is away).
+    return Alignment(False, "no lexical overlap with the objective and no model "
+                     "available to verify — flagging for safety", "heuristic")
 
 
 async def judge_alignment(objective: str, action: str, chat_fn=None) -> Alignment:

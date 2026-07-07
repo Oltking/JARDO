@@ -90,15 +90,15 @@ async def test_semantic_cache_hit(session, monkeypatch):
         calls["n"] += 1
         return "Paris.", 90
 
-    # First: a miss stores the answer + its embedding.
+    # First: a miss stores the answer + its embedding (semantic opt-in).
     q1 = [{"role": "user", "content": "what is the capital of France?"}]
-    r1 = await cached_call(session, "m", q1, miss)
+    r1 = await cached_call(session, "m", q1, miss, allow_semantic=True)
     assert r1.cached is False
 
     # A *differently worded* but semantically-similar question → semantic hit,
     # no new model call, tokens saved.
     q2 = [{"role": "user", "content": "tell me the French capital city"}]
-    r2 = await cached_call(session, "m", q2, miss)
+    r2 = await cached_call(session, "m", q2, miss, allow_semantic=True)
     assert r2.cached is True
     assert r2.content == "Paris."
     assert r2.tokens_saved == 90
@@ -106,5 +106,31 @@ async def test_semantic_cache_hit(session, monkeypatch):
 
     # An unrelated question does NOT hit.
     q3 = [{"role": "user", "content": "how tall is Mount Everest?"}]
-    r3 = await cached_call(session, "m", q3, miss)
+    r3 = await cached_call(session, "m", q3, miss, allow_semantic=True)
     assert r3.cached is False
+
+
+async def test_multi_turn_is_not_semantically_matched(session, monkeypatch):
+    """Without allow_semantic (multi-turn default), a similar latest message must
+    NOT return another conversation's answer."""
+    await session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    await session.execute(
+        text("ALTER TABLE response_cache ADD COLUMN IF NOT EXISTS embedding vector(768)"))
+    await session.flush()
+
+    async def fake_embed(t):
+        return [1.0] + [0.0] * 767  # everything embeds the same
+    monkeypatch.setattr(cache_mod, "embed", fake_embed)
+
+    async def miss_a():
+        return "answer A", 50
+
+    async def miss_b():
+        return "answer B", 50
+
+    a = [{"role": "system", "content": "ctx A"}, {"role": "user", "content": "go"}]
+    b = [{"role": "system", "content": "ctx B"}, {"role": "user", "content": "go"}]
+    ra = await cached_call(session, "m", a, miss_a)  # default: no semantic
+    rb = await cached_call(session, "m", b, miss_b)
+    assert ra.content == "answer A"
+    assert rb.content == "answer B"  # NOT cross-matched to A despite same embedding
