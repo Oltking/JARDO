@@ -140,23 +140,45 @@ def facts() -> None:
 @app.command(name="eval-behavior")
 def eval_behavior() -> None:
     """Score Jardo's safety decisions (always) and intent routing (needs a key)."""
-    from core.behavior_evals import run_intent_eval, run_safety_eval
+    from core.behavior_evals import (
+        run_alignment_eval,
+        run_intent_eval,
+        run_safety_eval,
+    )
+    from core.inference import providers
+    from core.inference.fireworks import FireworksClient
+    from core.router.router import RouterConfig
 
-    async def _route(utterance: str) -> dict:
-        from core.assistant import build_messages, parse_intent
-        from core.inference import providers
-        from core.inference.fireworks import FireworksClient
-        from core.router.router import RouterConfig
-
-        if not providers.configured():
-            return {"intent": "chat"}
+    async def _cheap_chat(prompt: str) -> str:
         chosen = providers.configured()[0]
         model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
         client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                                  timeout=30)
         r = await client.chat(providers.resolve_model(chosen, model),
-                              build_messages(utterance), max_tokens=400, temperature=0.0)
-        return parse_intent(r.content)
+                              [{"role": "user", "content": prompt}], max_tokens=400,
+                              temperature=0.0)
+        return r.content
+
+    async def _route(utterance: str) -> dict:
+        from core.assistant import build_messages, parse_intent
+        if not providers.configured():
+            return {"intent": "chat"}
+        return parse_intent(await _cheap_chat_msgs(build_messages(utterance)))
+
+    async def _cheap_chat_msgs(msgs: list) -> str:
+        chosen = providers.configured()[0]
+        model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+        client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
+                                 timeout=30)
+        r = await client.chat(providers.resolve_model(chosen, model), msgs,
+                              max_tokens=400, temperature=0.0)
+        return r.content
+
+    async def _judge(objective: str, action: str) -> bool:
+        from core.supervision import judge_alignment
+        a = await judge_alignment(objective, action,
+                                  chat_fn=_cheap_chat if providers.configured() else None)
+        return a.aligned
 
     async def _run() -> None:
         safety = run_safety_eval()
@@ -176,6 +198,16 @@ def eval_behavior() -> None:
                               f"{m['got']}: {m['utterance']}")
         else:
             console.print("[dim]intents: skipped (no capable model configured)[/dim]")
+        align = await run_alignment_eval(_judge)
+        if align["n"] and providers.configured():
+            color = "green" if align["score"] >= 0.9 else "yellow"
+            console.print(f"[bold]align[/bold]   [{color}]{align['passed']}/{align['n']} "
+                          f"({align['score'] * 100:.0f}%)[/{color}]")
+            for m in align["misses"]:
+                console.print(f"  [yellow]MISS[/yellow] expected {m['expected']}, got "
+                              f"{m['got']}: {m['objective']} | {m['action']}")
+        else:
+            console.print("[dim]align: skipped (no capable model configured)[/dim]")
 
     asyncio.run(_run())
 

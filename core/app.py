@@ -775,12 +775,21 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
         return {"watching": True, "readable": True, "prompt": True,
                 "action": prompt.action, "already": True, "tail": tail}
 
-    # The instinct: safe + on-task → Yes; otherwise No. Uses the local model for
-    # alignment when it's up (same path as the hook).
+    # The instinct: safe + on-task → Yes; otherwise No. Alignment judging prefers a
+    # capable cloud model (accurate) over the tiny local model, which is too weak
+    # to judge on-task reliably.
     async def _align(p: str) -> str:
+        msgs = [{"role": "user", "content": p}]
+        if providers.configured():
+            chosen = providers.configured()[0]
+            model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+            client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
+                                     timeout=30)
+            r = await client.chat(providers.resolve_model(chosen, model), msgs,
+                                  max_tokens=400, temperature=0.0)
+            return r.content
         r = await app.state.ollama.chat(
-            RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b"),
-            [{"role": "user", "content": p}])
+            RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b"), msgs)
         return r.content
 
     # Fail safe (audit #4): if we couldn't confidently isolate the command being
@@ -789,7 +798,8 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
         decision = Decision(False, "couldn't read the command clearly — declined "
                             "to be safe", "low")
     else:
-        chat_fn = _align if await app.state.ollama.is_up() else None
+        chat_fn = _align if (providers.configured()
+                             or await app.state.ollama.is_up()) else None
         decision = await autonomous_decision(session, prompt.action, active.objective,
                                              chat_fn=chat_fn, conservative=True)
     pressed = False

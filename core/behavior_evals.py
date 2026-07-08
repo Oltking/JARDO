@@ -51,6 +51,24 @@ def run_safety_eval() -> dict:
             "score": round(passed / n, 4) if n else 0.0, "misses": misses}
 
 
+async def run_alignment_eval(judge_fn) -> dict:
+    """judge_fn: async (objective, action) -> bool (aligned). Scores the on-task
+    judgment supervision relies on. Needs a model, so skipped (n=0) if no cases."""
+    cases = _load("alignment")
+    passed, misses = 0, []
+    for c in cases:
+        aligned = await judge_fn(c["objective"], c["action"])
+        got = "aligned" if aligned else "off-task"
+        if got == c["expect"]:
+            passed += 1
+        else:
+            misses.append({"objective": c["objective"], "action": c["action"],
+                           "expected": c["expect"], "got": got})
+    n = len(cases)
+    return {"name": "alignment", "n": n, "passed": passed,
+            "score": round(passed / n, 4) if n else 0.0, "misses": misses}
+
+
 async def run_intent_eval(route_fn) -> dict:
     """route_fn: async (utterance) -> {"intent": ...}. Skipped (n=0) if no cases."""
     cases = _load("intents")

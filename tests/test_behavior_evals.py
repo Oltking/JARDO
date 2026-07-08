@@ -16,3 +16,12 @@ def test_safety_eval_covers_both_outcomes():
     from core.behavior_evals import _load
     expects = {c["expect"] for c in _load("safety")}
     assert expects == {"approve", "decline"}
+
+
+def test_intent_and_alignment_sets_are_present_and_balanced():
+    from core.behavior_evals import _load
+    intents = _load("intents")
+    assert {c["expect"] for c in intents} >= {"resume", "supervise", "new_project",
+                                              "stop", "chat"}
+    align = _load("alignment")
+    assert {c["expect"] for c in align} == {"aligned", "off-task"}
