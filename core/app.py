@@ -487,6 +487,13 @@ async def voice_status() -> dict:
     from starlette.concurrency import run_in_threadpool
     devices = await run_in_threadpool(mic.list_input_devices)
     selected = await run_in_threadpool(mic.pick_builtin_mic)
+    # Warm the STT model in the background so the first spoken turn isn't slow
+    # (the model-load cost is paid now, while the app is just opening).
+    if not hasattr(app.state, "stt"):
+        import threading
+        from core.voice.stt import SpeechToText
+        app.state.stt = SpeechToText(settings.voice_stt_model)
+        threading.Thread(target=app.state.stt.warmup, daemon=True).start()
     voice_label = (
         "Piper (neural)" if settings.voice_tts_backend == "piper"
         else settings.voice_tts_voice
@@ -514,7 +521,8 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
 
     if request.auto_stop:
         audio = await run_in_threadpool(
-            mic.record_until_silence, request.max_seconds, 900, request.listen_timeout)
+            mic.record_until_silence, request.max_seconds,
+            settings.voice_silence_ms, request.listen_timeout)
     else:
         audio = await run_in_threadpool(mic.record_seconds, request.seconds)
     heard = bool(audio.size)

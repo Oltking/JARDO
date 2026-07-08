@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # best accuracy, at CPU-speed cost). The vocabulary prompt in stt.py helps on
     # any model.
     voice_stt_model: str = "small.en"
+    # Speed knobs (spec §8): beam_size 1 (greedy) is ~2-3x faster than 5 with a
+    # small accuracy cost — worth it for short spoken commands. silence_ms is how
+    # long to wait after you stop talking before transcribing.
+    voice_stt_beam_size: int = 1
+    voice_silence_ms: int = 550
     # Optional noise suppression before STT (noisereduce). Off by default and
     # measured, not assumed — Whisper can do worse on over-denoised audio.
     # Needs the `denoise` extra: uv sync --extra denoise
