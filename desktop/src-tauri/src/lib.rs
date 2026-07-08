@@ -63,6 +63,94 @@ fn client() -> Result<reqwest::Client, ApiError> {
         .map_err(ApiError::transport)
 }
 
+// ---- Embedded core lifecycle ----------------------------------------------
+// The self-contained build ships the Python core as a frozen binary inside the
+// .app. We spawn it on launch (embedded mode: SQLite + in-process queue, no
+// services) and kill it on quit. In dev, the core is run separately, so if the
+// bundled binary isn't present we simply don't spawn and talk to whatever core
+// is already at 127.0.0.1:8000.
+
+/// Handle to the spawned core process so we can stop it on app exit.
+struct CoreProcess(std::sync::Mutex<Option<std::process::Child>>);
+
+/// Quick check whether something is already listening on the core's address.
+fn core_is_reachable() -> bool {
+    use std::net::ToSocketAddrs;
+    let base = core_base();
+    let addr = base
+        .trim_start_matches("http://")
+        .trim_start_matches("https://");
+    if let Ok(mut addrs) = addr.to_socket_addrs() {
+        if let Some(sa) = addrs.next() {
+            return std::net::TcpStream::connect_timeout(
+                &sa,
+                std::time::Duration::from_millis(250),
+            )
+            .is_ok();
+        }
+    }
+    false
+}
+
+/// Locate the bundled frozen core executable across the resource-dir layouts
+/// Tauri may produce. Returns None in dev (no bundled core → use external).
+fn core_binary_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let res = app.path().resource_dir().ok()?;
+    for rel in [
+        "jardo-core/jardo-core",
+        "resources/jardo-core/jardo-core",
+        "_up_/jardo-core/jardo-core",
+    ] {
+        let p = res.join(rel);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// Start the bundled core (if present) and, in a background thread, wait for it
+/// to become healthy. The frontend Splash polls /healthz independently, so we
+/// don't need to emit an event; this just owns the process lifetime.
+fn spawn_core(app: &AppHandle) {
+    // An explicit external core (dev / tests) takes precedence — never spawn.
+    if std::env::var("JARDO_CORE_URL").is_ok() {
+        return;
+    }
+    // If a core is already serving (e.g. `uv run jardo serve` during dev), use it
+    // rather than spawning a second one that would fight for the port.
+    if core_is_reachable() {
+        eprintln!("jardo: a core is already serving; not spawning the bundled one");
+        return;
+    }
+    let Some(bin) = core_binary_path(app) else {
+        eprintln!("jardo: no bundled core found; expecting an external core at 127.0.0.1:8000");
+        return;
+    };
+    match std::process::Command::new(&bin)
+        .env("JARDO_EMBEDDED", "1")
+        .spawn()
+    {
+        Ok(child) => {
+            if let Some(state) = app.try_state::<CoreProcess>() {
+                *state.0.lock().unwrap() = Some(child);
+            }
+            eprintln!("jardo: started bundled core {}", bin.display());
+        }
+        Err(e) => eprintln!("jardo: failed to start core {}: {e}", bin.display()),
+    }
+}
+
+/// Kill the spawned core, if we started one. Safe to call more than once.
+fn stop_core(app: &AppHandle) {
+    if let Some(state) = app.try_state::<CoreProcess>() {
+        if let Some(mut child) = state.0.lock().unwrap().take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 /// Deserialize a successful JSON response, mapping non-2xx to a status-bearing
 /// `ApiError` so the frontend can react (e.g. show the "run jardo setup" banner
 /// on 409).
@@ -322,12 +410,17 @@ async fn start_project(
     name: Option<String>,
     location: Option<String>,
     existing_path: Option<String>,
+    details: Option<String>,
+    spec_text: Option<String>,
+    spec_filename: Option<String>,
 ) -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .post(format!("{}/projects/start", core_base()))
         .json(&serde_json::json!({
             "goal": goal, "agent": agent, "name": name,
             "location": location, "existing_path": existing_path,
+            "details": details, "spec_text": spec_text,
+            "spec_filename": spec_filename,
         }))
         .timeout(std::time::Duration::from_secs(60))
         .send().await.map_err(ApiError::transport)?;
@@ -658,15 +751,18 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(
             // Global-shortcut plugin init (plugin-global-shortcut.md). The
             // kill-switch hotkey itself is registered from the frontend, which
             // calls the `kill_switch` command — keeping tray + hotkey unified.
             tauri_plugin_global_shortcut::Builder::new().build(),
         )
+        .manage(CoreProcess(std::sync::Mutex::new(None)))
         .setup(|app| {
             let handle = app.handle();
+            // Start the embedded core (no-op in dev when it's run separately).
+            spawn_core(handle);
             #[cfg(desktop)]
             build_tray(handle)?;
             Ok(())
@@ -709,6 +805,14 @@ pub fn run() {
             coding_decisions,
             kill_switch
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Jardo desktop app");
+        .build(tauri::generate_context!())
+        .expect("error while building Jardo desktop app");
+
+    // Own the core's lifetime: stop it when the app is quitting so we never
+    // leave an orphaned core (and its port) behind.
+    app.run(|handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+            stop_core(handle);
+        }
+    });
 }

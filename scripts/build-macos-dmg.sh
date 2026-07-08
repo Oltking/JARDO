@@ -3,14 +3,23 @@
 #
 # Output: desktop/src-tauri/target/release/bundle/dmg/Jardo_<version>_<arch>.dmg
 #
-# NOTE: this bundles the DESKTOP APP only. The app talks to the Python core at
-# 127.0.0.1:8000, which today still needs to be running (jardo serve) plus
-# Postgres + Redis. Making the DMG fully self-contained is the packaging work
-# tracked in PACKAGING.md (bundle the core as a sidecar + solve the datastore
-# dependency). Until then, this DMG is for testing the shell / signing flow.
+# Self-contained: the Python core is frozen into a sidecar (embedded SQLite +
+# in-process queue, no Postgres/Redis/Docker) and bundled inside the .app. Voice
+# libraries ship in the bundle; the voice MODEL (~180 MB) downloads on first use,
+# keeping this DMG small (~110-130 MB). See PACKAGING.md.
 set -euo pipefail
 
-cd "$(dirname "$0")/../desktop"
+cd "$(dirname "$0")/.."
+
+if [ ! -x "desktop/src-tauri/resources/jardo-core/jardo-core" ]; then
+  echo "==> Freezing the Python core (sidecar)…"
+  ./scripts/build-core-binary.sh
+else
+  echo "==> Using already-staged core at desktop/src-tauri/resources/jardo-core"
+  echo "    (delete it to force a rebuild)"
+fi
+
+cd desktop
 
 echo "==> Installing frontend deps"
 pnpm install

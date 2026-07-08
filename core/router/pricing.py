@@ -9,7 +9,9 @@ model with an unknown context window for prompts near any limit.
 from dataclasses import dataclass
 from pathlib import Path
 
-PRICING_PATH = Path("docs/vendor/fireworks/PRICING_TABLE.md")
+from core.paths import data_path
+
+PRICING_PATH = data_path("docs/vendor/fireworks/PRICING_TABLE.md")
 
 
 @dataclass(frozen=True)

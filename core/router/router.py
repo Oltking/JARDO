@@ -19,11 +19,12 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from core.paths import data_path
 from core.router.classifier import TaskClass
 from core.router.pricing import ModelPrice, estimate_cost_usd, load_pricing
 
-ROUTING_CONFIG_PATH = Path("inference/routing.toml")
-SCORES_PATH = Path("evals/scores.json")
+ROUTING_CONFIG_PATH = data_path("inference/routing.toml")
+SCORES_PATH = data_path("evals/scores.json")
 
 
 class BudgetExceeded(RuntimeError):
