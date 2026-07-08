@@ -803,6 +803,20 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
         obs = parse_observation(result.content)
         app.state.observe_digest = digest
         app.state.observe_last = obs
+
+        # Token-budget awareness (Lane C): when the agent is running low on context,
+        # tell it to /compact before it hits the wall — once per low spell, so it
+        # doesn't nag.
+        if obs.get("context") == "low" and not getattr(app.state, "nudged_low", False):
+            from core.supervision import compaction_nudge
+            try:
+                terminal_watch.type_text(compaction_nudge(active.objective), window_id)
+                app.state.nudged_low = True
+                obs["nudged"] = True
+            except Exception:  # noqa: BLE001 — couldn't type; owner can compact
+                pass
+        elif obs.get("context") != "low":
+            app.state.nudged_low = False  # reset once context recovers
         return obs
     except Exception:  # noqa: BLE001 — transient → say nothing this beat
         return {"state": "unknown"}

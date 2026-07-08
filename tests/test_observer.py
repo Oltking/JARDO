@@ -36,8 +36,23 @@ def test_fails_safe_and_fills_every_field():
         p = parse_observation(bad)
         assert p["state"] == "idle"
         # every field is always present (the UI can rely on it)
-        for f in ("activity", "last_command", "issue", "progress", "note", "notable"):
+        for f in ("activity", "last_command", "issue", "progress", "context", "note",
+                  "notable"):
             assert f in p
+        assert p["context"] == "ok"  # defaults safe
+
+
+def test_context_low_is_detected():
+    p = parse_observation('{"state":"progressing","context":"low"}')
+    assert p["context"] == "low"
+    p2 = parse_observation('{"state":"progressing","context":"ok"}')
+    assert p2["context"] == "ok"
+
+
+def test_compaction_nudge_mentions_compact_and_goal():
+    from core.supervision import compaction_nudge
+    g = compaction_nudge("build the API")
+    assert "/compact" in g and "build the API" in g
 
 
 def test_notable_set_and_messages():

@@ -18,7 +18,7 @@ STATES = ("progressing", "stuck", "off_task", "done", "idle", "waiting", "error"
 NOTABLE = frozenset({"stuck", "off_task", "done", "error"})
 
 # The structured fields the model reports — everything it can see.
-_FIELDS = ("state", "activity", "last_command", "issue", "progress", "note")
+_FIELDS = ("state", "activity", "last_command", "issue", "progress", "context", "note")
 
 SYSTEM = """You are supervising a coding agent (Claude Code / Gemini CLI) working
 toward the owner's goal. Given the goal and the agent's recent terminal output,
@@ -38,10 +38,14 @@ Fields (use "" when a field isn't visible — never invent):
 - issue: the actual error / failure / blocker text if any (short), else "".
 - progress: a concrete progress signal if any ("12 tests passed", "build
     succeeded", "3 files changed", "server started"), else "".
+- context: "low" if you see any sign the agent is running low on its context
+    window (a context/token indicator near full, an auto-compact / "compacting"
+    message, or the agent repeating itself or losing track for lack of context);
+    otherwise "ok".
 - note: ONE sentence to the owner — only meaningful when the state is notable.
 
 Schema: {"state": ..., "activity": "", "last_command": "", "issue": "",
-"progress": "", "note": ""}"""
+"progress": "", "context": "ok", "note": ""}"""
 
 
 def build_messages(goal: str, output: str) -> list[dict]:
@@ -54,7 +58,7 @@ def build_messages(goal: str, output: str) -> list[dict]:
 
 def parse_observation(raw: str) -> dict:
     empty = {f: "" for f in _FIELDS}
-    empty.update({"state": "idle", "notable": False})
+    empty.update({"state": "idle", "context": "ok", "notable": False})
     if not raw:
         return empty
     match = re.search(r"\{.*\}", raw, re.S)
@@ -70,5 +74,6 @@ def parse_observation(raw: str) -> dict:
     for field in ("activity", "last_command", "issue", "progress", "note"):
         val = obj.get(field, "")
         out[field] = val.strip()[:300] if isinstance(val, str) else ""
+    out["context"] = "low" if str(obj.get("context", "")).lower() == "low" else "ok"
     out["notable"] = out["state"] in NOTABLE
     return out

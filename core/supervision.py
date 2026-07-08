@@ -108,6 +108,17 @@ async def session_report(session: AsyncSession) -> dict:
             "guided": guided, "actions": actions, "spoken": spoken}
 
 
+def compaction_nudge(objective: str) -> str:
+    """What Jardo types when the agent is running low on context, so a long run
+    doesn't die mid-task (Lane C — token-budget awareness)."""
+    goal = (objective or "").strip() or "the current task"
+    return (
+        "Jardo here — you look low on context. Please run /compact to summarize the "
+        "conversation (or briefly note your progress and what's left), then continue "
+        f"toward: {goal}."
+    )
+
+
 def decline_guidance(action: str, reason: str, objective: str) -> str:
     """What Jardo types to the agent after declining a command — so it adapts and
     keeps working, instead of stalling on "tell me what to do differently". This
