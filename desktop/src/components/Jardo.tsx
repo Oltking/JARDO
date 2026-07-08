@@ -16,6 +16,7 @@ import {
   voiceTranscribe,
   whereAmI,
   type ApiError,
+  type Observation,
   type VoiceStatus,
 } from "../api";
 
@@ -153,6 +154,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [supervising, setSupervising] = useState<Supervising | null>(null);
+  const [obs, setObs] = useState<Observation | null>(null); // live agent read (P1)
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -491,6 +493,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   function stopSupervising() {
     superRef.current = null;
     setSupervising(null);
+    setObs(null);
   }
 
   // The supervision beat: while watching, poll the terminal and report answers.
@@ -545,6 +548,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       try {
         const o = await terminalObserve();
         if (!alive || !superRef.current) return;
+        if (o.state && o.state !== "unknown") setObs(o); // live mission-control read
         const state = o.state || "";
         if (o.notable && state && state !== lastStateRef.current) {
           lastStateRef.current = state;
@@ -589,16 +593,43 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     speaking: "speaking…",
   };
 
+  // P4 — the avatar reacts to what Jardo sees: while supervising it glows with the
+  // agent's state (calm progressing, amber stuck, red error, green done), else the
+  // voice phase. This is only possible because the observer reads the agent's state.
+  const avatarState =
+    supervising && obs?.state && obs.state !== "unknown" ? obs.state : phase;
+
+  const STATE_LABEL: Record<string, string> = {
+    progressing: "Working", stuck: "Stuck", off_task: "Off-task", done: "Done",
+    error: "Error", waiting: "Waiting", idle: "Idle",
+  };
+
   return (
     <div className="jardo">
       {supervising && (
-        <div className="supervising-bar">
-          <span className="pulse" />
-          Supervising <strong>{supervising.agent}</strong>
-          {supervising.goal ? ` — ${supervising.goal}` : " in your terminal"}
-          <button className="link-btn" onClick={stopSupervising}>
-            stop
-          </button>
+        // P1 — mission control: the flagship gets a real panel, not a status line.
+        <div className={`mission ${obs?.state || "waiting"}`}>
+          <div className="mission-head">
+            <span className="pulse" />
+            <span>
+              Supervising <strong>{supervising.agent}</strong>
+            </span>
+            {supervising.goal && <span className="mission-goal">{supervising.goal}</span>}
+            <button className="link-btn" onClick={stopSupervising}>
+              stop
+            </button>
+          </div>
+          {obs && (
+            <div className="mission-body">
+              <span className={`state-chip ${obs.state}`}>
+                {STATE_LABEL[obs.state || "idle"] || obs.state}
+              </span>
+              {obs.activity && <span className="mission-activity">{obs.activity}</span>}
+              {obs.last_command && <code className="mission-cmd">{obs.last_command}</code>}
+              {obs.progress && <span className="mission-progress">✓ {obs.progress}</span>}
+              {obs.issue && <span className="mission-issue">⚠ {obs.issue}</span>}
+            </div>
+          )}
         </div>
       )}
 
@@ -625,7 +656,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           <div className="empty welcome">
             <video
               ref={playMuted}
-              className={`welcome-avatar ${phase}`}
+              className={`welcome-avatar ${avatarState}`}
               src="/jardo-avatar.mp4"
               autoPlay
               loop
@@ -656,14 +687,13 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       <div className="dock">
         <video
           ref={playMuted}
-          className={`dock-avatar ${phase}`}
+          className={`dock-avatar ${avatarState}`}
           src="/jardo-avatar.mp4"
           autoPlay
           loop
           muted
           playsInline
         />
-        <span className={`live-dot ${phase}`} />
         <span className="live-label">{phaseLabel[phase]}</span>
         <textarea
           value={input}

@@ -1357,3 +1357,56 @@ code {
 .dock-avatar.listening { box-shadow: 0 0 0 2px var(--ok), 0 0 14px -4px var(--ok); }
 .dock-avatar.thinking { box-shadow: 0 0 0 2px var(--warn); }
 .dock-avatar.speaking { box-shadow: 0 0 0 2px #7aa2f7, 0 0 14px -4px #7aa2f7; }
+
+/* ============ P1 — Supervision mission control ============ */
+.mission {
+  padding: 12px 16px; background: var(--surface);
+  border-bottom: 1px solid var(--line-soft); border-left: 3px solid var(--faint);
+  transition: border-color 0.4s ease;
+}
+.mission.progressing, .mission.done { border-left-color: var(--ok); }
+.mission.stuck, .mission.off_task, .mission.waiting { border-left-color: var(--warn); }
+.mission.error { border-left-color: var(--bad); }
+.mission-head { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+.mission-head strong { color: var(--ok); }
+.mission-goal {
+  color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 46%;
+}
+.mission-head .link-btn { margin-left: auto; }
+.mission-body {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 9px;
+}
+.state-chip {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--faint); flex: none;
+}
+.state-chip.progressing { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.state-chip.done { color: var(--ok); border-color: var(--ok); }
+.state-chip.stuck, .state-chip.off_task, .state-chip.waiting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.state-chip.error { color: var(--bad); border-color: var(--bad); }
+.mission-activity { font-size: 13px; color: var(--text); }
+.mission-cmd {
+  font-family: var(--mono); font-size: 12px; color: var(--dim);
+  background: var(--bg); border: 1px solid var(--line);
+  padding: 2px 7px; border-radius: 4px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mission-progress { font-size: 12px; color: var(--ok); }
+.mission-issue { font-size: 12px; color: var(--bad); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============ P4 — the avatar reacts to what Jardo sees ============ */
+.welcome-avatar.progressing, .dock-avatar.progressing { box-shadow: 0 0 0 2px var(--ok), 0 0 26px -6px var(--ok); }
+.welcome-avatar.done, .dock-avatar.done { box-shadow: 0 0 0 2px var(--ok), 0 0 40px -4px var(--ok); }
+.welcome-avatar.stuck, .welcome-avatar.off_task, .dock-avatar.stuck, .dock-avatar.off_task {
+  box-shadow: 0 0 0 2px var(--warn), 0 0 26px -6px var(--warn); animation: pulse 1.6s infinite;
+}
+.welcome-avatar.error, .dock-avatar.error { box-shadow: 0 0 0 2px var(--bad), 0 0 30px -5px var(--bad); animation: pulse 1.2s infinite; }
+.welcome-avatar.waiting, .welcome-avatar.idle, .dock-avatar.waiting, .dock-avatar.idle { box-shadow: 0 0 0 1px var(--line); }
+
+/* ============ P3 — drawer panel polish ============ */
+.drawer-body h2 { font-size: 15px; letter-spacing: 0.2px; margin: 20px 0 6px; color: var(--text); }
+.drawer-body h2:first-child { margin-top: 0; }
+.drawer-body { font-size: 13px; }
+.drawer-body .empty { color: var(--faint); padding: 24px 0; text-align: center; }
