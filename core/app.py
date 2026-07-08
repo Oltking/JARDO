@@ -776,7 +776,7 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
                                  timeout=30)
         result = await client.chat(providers.resolve_model(chosen, model),
                                    build_messages(active.objective, tail),
-                                   max_tokens=400, temperature=0.0)
+                                   max_tokens=400, temperature=0.0, reasoning_effort="low")
         return parse_observation(result.content)
     except Exception:  # noqa: BLE001 — transient → say nothing this beat
         return {"state": "unknown"}
@@ -830,7 +830,7 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
             client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                                      timeout=30)
             r = await client.chat(providers.resolve_model(chosen, model), msgs,
-                                  max_tokens=400, temperature=0.0)
+                                  max_tokens=400, temperature=0.0, reasoning_effort="low")
             return r.content
         r = await app.state.ollama.chat(
             RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b"), msgs)
@@ -982,7 +982,8 @@ async def assistant_route(body: RouteRequest) -> dict:
         # reasoning_content first, then the JSON) — 80 was too low and they got
         # cut off before emitting content.
         result = await client.chat(providers.resolve_model(chosen, model),
-                                    build_messages(msg), max_tokens=400, temperature=0.0)
+                                    build_messages(msg), max_tokens=400, temperature=0.0,
+                                    reasoning_effort="low")
         return parse_intent(result.content)
     except Exception:  # noqa: BLE001 — router failed → let the desktop fall back
         return {"intent": "chat", "fallback": True}

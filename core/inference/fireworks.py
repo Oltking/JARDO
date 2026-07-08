@@ -39,13 +39,19 @@ class FireworksClient:
         messages: list[dict],
         max_tokens: int = 2048,
         temperature: float = 0.6,
+        reasoning_effort: str | None = None,
     ) -> ChatResult:
-        payload = {
+        payload: dict = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        # For reasoning models (gpt-oss), "low" effort skips most of the token-
+        # burning internal reasoning — big savings on simple classification tasks
+        # (intent, alignment, observation) that don't need it (spec §5).
+        if reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.post(
                 f"{self._base_url}/chat/completions",

@@ -181,7 +181,7 @@ def eval_behavior() -> None:
                                  timeout=30)
         r = await client.chat(providers.resolve_model(chosen, model),
                               [{"role": "user", "content": prompt}], max_tokens=400,
-                              temperature=0.0)
+                              temperature=0.0, reasoning_effort="low")
         return r.content
 
     async def _route(utterance: str) -> dict:
@@ -196,7 +196,7 @@ def eval_behavior() -> None:
         client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                                  timeout=30)
         r = await client.chat(providers.resolve_model(chosen, model), msgs,
-                              max_tokens=400, temperature=0.0)
+                              max_tokens=400, temperature=0.0, reasoning_effort="low")
         return r.content
 
     async def _judge(objective: str, action: str) -> bool:
