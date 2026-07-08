@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jardo · the AI chief of staff that conducts your coding agents</title>
+  <meta name="description" content="Jardo is a voice-first personal AI that supervises your coding agents. It answers their permission prompts against your goal, keeps them on-task, and routes every request to the cheapest capable model. Safe, continuous, and a fraction of the token cost." />
+
+  <meta property="og:title" content="Jardo · your AI chief of staff for coding agents" />
+  <meta property="og:description" content="It conducts Claude Code and Gemini CLI while you're away: safely, continuously, and at a fraction of the token cost." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/jardo-logo.png" />
+  <meta name="theme-color" content="#000000" />
+
+  <link rel="icon" type="image/png" href="assets/jardo-logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- ───────────────────────── nav ───────────────────────── -->
+  <header class="nav" id="nav">
+    <a class="brand" href="#top" aria-label="Jardo home">
+      <img src="assets/jardo-logo.png" alt="" class="brand__mark" />
+      <span class="brand__word">Jardo</span>
+    </a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#supervise">Supervise</a>
+      <a href="#how">How it works</a>
+      <a href="#trust">Security</a>
+      <a href="#cost">Cost</a>
+    </nav>
+    <a class="btn btn--ghost nav__cta" href="#download">Download</a>
+  </header>
+
+  <main id="top">
+    <!-- ───────────────────────── hero ───────────────────────── -->
+    <section class="hero">
+      <canvas class="hero__halftone" id="halftone" aria-hidden="true"></canvas>
+      <div class="hero__inner">
+        <p class="eyebrow reveal">Voice-first · macOS · Security-first</p>
+        <h1 class="hero__title reveal">
+          Your AI <em>chief&nbsp;of&nbsp;staff</em><br />for coding agents.
+        </h1>
+        <p class="hero__sub reveal">
+          Jardo sits above Claude Code and Gemini CLI and <strong>runs them for you</strong>.
+          It answers every permission prompt against your goal, keeps the work on-task and safe,
+          and routes each request to the cheapest capable model.
+        </p>
+        <div class="hero__actions reveal">
+          <a class="btn btn--solid magnetic" href="#download">
+            <span>Download for macOS</span>
+            <span class="btn__tag">Beta</span>
+          </a>
+          <a class="btn btn--ghost" href="#supervise">See how it supervises</a>
+        </div>
+        <p class="hero__note reveal">Windows, coming soon. No account. No telemetry.</p>
+      </div>
+      <div class="hero__scroll" aria-hidden="true"><span></span></div>
+    </section>
+
+    <!-- ───────────────────────── statement ───────────────────────── -->
+    <section class="statement">
+      <p class="statement__text reveal">
+        Coding agents are powerful but needy. They stop every few minutes to ask permission,
+        forget where they were, and burn tokens re-reading your codebase.
+        <span class="statement__hl">Jardo is the layer that makes an agent something you can actually delegate to.</span>
+      </p>
+    </section>
+
+    <!-- ───────────────────────── pillars ───────────────────────── -->
+    <section class="pillars" id="supervise">
+      <div class="pillar reveal">
+        <span class="pillar__num">01</span>
+        <h3>A supervisor</h3>
+        <p>It watches the agent work and presses the answer on each permission prompt: approving what's
+        safe and on-task, declining what isn't. Conservative by default, so unrecognized or destructive
+        commands are never auto-run.</p>
+      </div>
+      <div class="pillar reveal">
+        <span class="pillar__num">02</span>
+        <h3>A memory</h3>
+        <p>Ask <em>“where am I?”</em> and it tells you the goal, what's done, what's left, and what needs
+        your attention, pulled from the agent's own session memory and git, not an expensive codebase re-scan.</p>
+      </div>
+      <div class="pillar reveal">
+        <span class="pillar__num">03</span>
+        <h3>A cost engine</h3>
+        <p>Every request is routed to the cheapest model that clears an accuracy bar, and cached
+        aggressively. Premium results, without premium bills.</p>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── how it works ───────────────────────── -->
+    <section class="how" id="how">
+      <header class="section-head reveal">
+        <p class="eyebrow">The flow</p>
+        <h2>You talk. It conducts.</h2>
+      </header>
+      <ol class="steps">
+        <li class="step reveal">
+          <span class="step__k">01</span>
+          <h4>Speak your intent</h4>
+          <p>Open the app. It's already listening. “Build me a landing page with Claude,” or
+          “supervise Claude in my terminal toward shipping auth.”</p>
+        </li>
+        <li class="step reveal">
+          <span class="step__k">02</span>
+          <h4>It sets the stage</h4>
+          <p>Scaffolds the folder, <code>git init</code>s, writes the agent's brief, opens your real
+          terminal, and launches the agent, after a one-line confirmation.</p>
+        </li>
+        <li class="step reveal">
+          <span class="step__k">03</span>
+          <h4>It stands watch</h4>
+          <p>It reads the terminal without disturbing it and answers each prompt against your goal,
+          keeping the agent moving instead of stalled on “Yes / No.”</p>
+        </li>
+        <li class="step reveal">
+          <span class="step__k">04</span>
+          <h4>You return anytime</h4>
+          <p>“Where am I?” resumes instantly: the objective, recent progress, what's uncommitted, and
+          anything that needs you.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ───────────────────────── cost ───────────────────────── -->
+    <section class="cost" id="cost">
+      <div class="cost__copy reveal">
+        <p class="eyebrow">Cost as a first-class feature</p>
+        <h2>Premium output.<br />A fraction of the bill.</h2>
+        <p class="cost__lede">
+          A cost-accuracy router picks local → self-hosted → cloud by live $/token math. Exact and
+          semantic response caching means repeated work is <em>free</em>. Agent briefs push for small,
+          committed steps that stay inside the session's token budget.
+        </p>
+        <ul class="cost__list">
+          <li>Cheapest capable model, every time</li>
+          <li>Repeats served from cache at zero tokens</li>
+          <li>Bring your own Fireworks or AMD key, and it prefers the cheaper one</li>
+        </ul>
+      </div>
+      <div class="cost__stats">
+        <div class="stat reveal">
+          <span class="stat__num" data-count="7.5" data-suffix="×">0</span>
+          <span class="stat__label">cheaper with reasoning tuned off, at 100% eval accuracy</span>
+        </div>
+        <div class="stat reveal">
+          <span class="stat__num" data-count="0" data-suffix="">0</span>
+          <span class="stat__label">tokens spent on a cache hit</span>
+        </div>
+        <div class="stat reveal">
+          <span class="stat__num" data-count="100" data-suffix="%">0</span>
+          <span class="stat__label">of the safety eval passing, a regression guard, not a hope</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── trust / security ───────────────────────── -->
+    <section class="trust" id="trust">
+      <header class="section-head reveal">
+        <p class="eyebrow">Security-first by design</p>
+        <h2>Built to be delegated to.</h2>
+      </header>
+      <div class="trust__grid">
+        <div class="tcard reveal"><h4>Keychain-only secrets</h4><p>API keys and key material live in the OS Keychain, never in files, never in a process listing.</p></div>
+        <div class="tcard reveal"><h4>Private by default</h4><p>Speech-to-text and memory recall run on your machine. Nothing about your voice or projects leaves the device unless a cloud model is truly needed.</p></div>
+        <div class="tcard reveal"><h4>Conservative autonomy</h4><p>Unattended, it auto-approves only positively-recognized safe actions (reads, tests, builds, in-project git) and declines everything else.</p></div>
+        <div class="tcard reveal"><h4>Kill-switch &amp; audit</h4><p>One hotkey halts everything. The audit log is append-only and redacts secrets. A local token gates every request.</p></div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── download ───────────────────────── -->
+    <section class="download" id="download">
+      <div class="download__inner reveal">
+        <img src="assets/jardo-logo.png" alt="" class="download__mark" />
+        <h2>Bring one home.</h2>
+        <p class="download__sub">
+          One double-click. No Docker, no database to install. The whole engine ships inside the app.
+        </p>
+        <div class="download__actions">
+          <a class="btn btn--solid btn--lg magnetic" id="dl-mac" href="#">
+            <span>Download for macOS</span>
+            <span class="btn__tag">Beta</span>
+          </a>
+          <span class="btn btn--disabled btn--lg">Windows, coming soon</span>
+        </div>
+        <p class="download__fine">
+          Unsigned early build: after downloading, <strong>right-click → Open</strong> to get past Gatekeeper.
+          Add your own model key in Settings on first run.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ───────────────────────── footer ───────────────────────── -->
+  <footer class="foot">
+    <div class="foot__brand">
+      <img src="assets/jardo-logo.png" alt="" class="brand__mark" />
+      <span class="brand__word">Jardo</span>
+    </div>
+    <p class="foot__tag">Your voice-first AI chief of staff. It conducts your coding agents while you're away.</p>
+    <p class="foot__copy">© <span id="year">2026</span> Jardo. Built security-first.</p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
