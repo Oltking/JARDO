@@ -138,6 +138,41 @@ def facts() -> None:
 
 
 @app.command()
+def forget(
+    fact_id: str = typer.Argument("", help="Fact id to forget (see: jardo facts)"),
+    extracted: bool = typer.Option(
+        False, "--extracted", help="Forget ALL auto-extracted (worker) facts"),
+) -> None:
+    """Forget a stored memory by id, or clear the auto-extracted facts."""
+    import uuid as _uuid
+
+    from core.db import SessionFactory
+    from core.memory import MemoryStore
+
+    async def _run() -> None:
+        async with SessionFactory() as session:
+            store = MemoryStore(session)
+            owner = await store.get_owner()
+            if owner is None:
+                console.print("[red]No owner set up. Run: jardo setup[/red]")
+                raise typer.Exit(1)
+            if extracted:
+                n = await store.forget_by_source(owner.id, "worker")
+                await session.commit()
+                console.print(f"[green]Forgot {n} auto-extracted fact(s).[/green]")
+            elif fact_id:
+                ok = await store.forget(owner.id, _uuid.UUID(fact_id))
+                await session.commit()
+                console.print("[green]Forgotten.[/green]" if ok
+                              else "[yellow]No such fact.[/yellow]")
+            else:
+                console.print("Give a fact id, or use --extracted to clear all "
+                              "auto-extracted facts.")
+
+    asyncio.run(_run())
+
+
+@app.command()
 def evals(task_type: str = "trivial", backend: str = "ollama", model: str = "") -> None:
     """Run an eval set against a backend/model; updates evals/scores.json (§5.3)."""
     from core.router.evals import run_eval

@@ -32,11 +32,30 @@ class MemoryStore:
         await self.session.flush()
         return memory
 
-    async def list_facts(self, owner_id: uuid.UUID) -> list[Memory]:
+    async def list_facts(self, owner_id: uuid.UUID, limit: int = 40) -> list[Memory]:
+        """Most-recent facts (bounded), returned oldest-first for a stable prompt.
+        Bounding matters: every fact is injected into every prompt, so an
+        unbounded list would grow the context (and cost) without limit."""
         rows = await self.session.execute(
-            select(Memory).where(Memory.owner_id == owner_id).order_by(Memory.created_at)
+            select(Memory).where(Memory.owner_id == owner_id)
+            .order_by(Memory.created_at.desc()).limit(limit)
         )
-        return list(rows.scalars())
+        return list(reversed(rows.scalars().all()))
+
+    async def forget(self, owner_id: uuid.UUID, fact_id: uuid.UUID) -> bool:
+        memory = await self.session.get(Memory, fact_id)
+        if memory is None or memory.owner_id != owner_id:
+            return False
+        await self.session.delete(memory)
+        return True
+
+    async def forget_by_source(self, owner_id: uuid.UUID, source: str) -> int:
+        rows = (await self.session.execute(
+            select(Memory).where(Memory.owner_id == owner_id, Memory.source == source)
+        )).scalars().all()
+        for memory in rows:
+            await self.session.delete(memory)
+        return len(rows)
 
     # -- conversations ----------------------------------------------------
     async def create_conversation(self, owner_id: uuid.UUID, title: str) -> Conversation:

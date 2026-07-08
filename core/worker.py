@@ -22,10 +22,23 @@ from core.reporter import generate_report
 logger = logging.getLogger("jardo.worker")
 
 _EXTRACTION_PROMPT = """\
-You extract durable personal facts from a conversation exchange.
-Return STRICT JSON: {"facts": ["..."]}. Include only stable, useful facts about
-the owner (preferences, projects, constraints, biography). If none, return
-{"facts": []}. Never include secrets, credentials, or one-off task details."""
+You extract DURABLE facts and PREFERENCES about the OWNER from what the owner
+said. Return STRICT JSON: {"facts": ["..."]}.
+
+Include only stable, reusable facts about the OWNER — especially:
+- how they like to work (tools, languages, frameworks, workflow, coding style),
+- their ongoing projects or goals,
+- standing constraints, requirements, or biography they state.
+
+NEVER include (these are the common mistakes):
+- anything about the assistant, "Jardo", or this app itself,
+- one-off or transient details (a single command, a file edited today, "removed X"),
+- conversation mechanics or the current task's step-by-step,
+- secrets or credentials,
+- anything you are inferring rather than something the owner actually stated.
+
+Prefer general preferences ("prefers pnpm", "wants tests before committing") over
+specific events. If there are no durable owner facts, return {"facts": []}."""
 
 
 async def extract_facts(ctx: dict, conversation_id: str) -> int:
@@ -39,8 +52,13 @@ async def extract_facts(ctx: dict, conversation_id: str) -> int:
         owner = await store.get_owner()
         if owner is None:
             return 0
-        exchange = await store.recent_messages(uuid.UUID(conversation_id), 2)
-        transcript = "\n".join(f"{m.role}: {m.content}" for m in exchange)
+        exchange = await store.recent_messages(uuid.UUID(conversation_id), 4)
+        # Only the OWNER's words describe the owner — the assistant's self-talk
+        # (e.g. "I'm Jardo, chief of staff…") must never become a "fact".
+        owner_said = [m.content for m in exchange if m.role == "user"]
+        if not owner_said:
+            return 0
+        transcript = "\n".join(f"owner: {c}" for c in owner_said)
 
         client = FireworksClient(api_key, settings.fireworks_base_url)
         try:
