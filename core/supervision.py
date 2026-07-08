@@ -66,6 +66,18 @@ class Alignment:
     judged_by: str  # "model" | "heuristic"
 
 
+def decline_guidance(action: str, reason: str, objective: str) -> str:
+    """What Jardo types to the agent after declining a command — so it adapts and
+    keeps working, instead of stalling on "tell me what to do differently". This
+    is the difference between supervising and just blocking (owner's insight)."""
+    goal = (objective or "").strip() or "what you were working on"
+    return (
+        "Jardo here, supervising on the owner's behalf. I couldn't approve that "
+        f"step ({reason}). Please don't run it — take a safe alternative or skip "
+        f"that step, then keep working toward: {goal}."
+    )
+
+
 _ALIGN_PROMPT = """\
 You are a security supervisor deciding whether a coding agent's action serves the
 owner's stated objective. Be practical: normal development work in service of the
@@ -114,8 +126,13 @@ async def judge_alignment(objective: str, action: str, chat_fn=None) -> Alignmen
         return Alignment(True, "no objective set", "heuristic")
     if chat_fn is not None:
         try:
+            # Redact credential-shaped strings before the action (from the
+            # terminal) crosses to the cloud model (audit HIGH). The safety scan
+            # in the caller still sees the raw command, so detection is unaffected.
+            from core.sentinel.checks import redact
             verdict = (await chat_fn(
-                _ALIGN_PROMPT.format(objective=objective[:500], action=action[:500])
+                _ALIGN_PROMPT.format(objective=redact(objective)[:500],
+                                     action=redact(action)[:500])
             )).strip().upper()
             if "OFF-TASK" in verdict or "OFF TASK" in verdict:
                 return Alignment(False, "model judged the action off-task for the "

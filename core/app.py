@@ -69,6 +69,11 @@ from core.api_auth import get_or_create_token  # noqa: E402
 _API_TOKEN = get_or_create_token()
 _AUTH_EXEMPT = {"/healthz"}
 
+# Input bounds (audit MEDIUM): keep a huge paste / adversarial input from blowing
+# the context window and cost. Chat gets room for real content; routing needs little.
+_MAX_CHAT_CHARS = 8000
+_MAX_ROUTE_CHARS = 2000
+
 
 import hmac  # noqa: E402
 
@@ -768,7 +773,19 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
     if terminal_watch.detect_permission_prompt(screen) is not None:
         return {"state": "waiting", "note": "waiting on a permission decision"}
 
-    tail = "\n".join(screen.splitlines()[-30:])
+    # Redact anything credential-shaped BEFORE it leaves the machine (audit HIGH):
+    # the terminal may show keys/tokens/.env, and this text goes to the cloud.
+    import hashlib
+
+    from core.sentinel.checks import redact
+    tail = redact("\n".join(screen.splitlines()[-30:]))
+
+    # Skip the model call when the screen hasn't changed since last beat — no new
+    # information, no reason to spend tokens (audit LOW #5).
+    digest = hashlib.sha256(tail.encode()).hexdigest()[:16]
+    if getattr(app.state, "observe_digest", None) == digest:
+        return getattr(app.state, "observe_last", None) or {"state": "idle"}
+
     chosen = providers.configured()[0]
     model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
     try:
@@ -777,7 +794,10 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
         result = await client.chat(providers.resolve_model(chosen, model),
                                    build_messages(active.objective, tail),
                                    max_tokens=400, temperature=0.0, reasoning_effort="low")
-        return parse_observation(result.content)
+        obs = parse_observation(result.content)
+        app.state.observe_digest = digest
+        app.state.observe_last = obs
+        return obs
     except Exception:  # noqa: BLE001 — transient → say nothing this beat
         return {"state": "unknown"}
 
@@ -865,14 +885,32 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     # on the next tick (e.g. after the owner grants Accessibility).
     if pressed:
         answered.add(fingerprint)
+
+    # A decline that just presses "No" leaves the agent stalled waiting for "what
+    # should I do differently?". So after declining a real command, Jardo TYPES an
+    # instruction telling the agent to adapt and keep working — the difference
+    # between supervising and blocking (owner's insight).
+    guided = False
+    if pressed and not decision.approve and prompt.kind == "command":
+        import asyncio
+
+        from core.supervision import decline_guidance
+        guidance = decline_guidance(prompt.action, decision.reason, active.objective)
+        await asyncio.sleep(0.7)  # let the agent render its follow-up input
+        try:
+            terminal_watch.type_text(guidance, window_id)
+            guided = True
+        except Exception:  # noqa: BLE001 — couldn't type; the owner can step in
+            pass
+
     await MemoryStore(session).audit(
         "jardo", "terminal.answered",
         {"action": prompt.action[:300], "approved": decision.approve,
-         "reason": decision.reason, "pressed": pressed})
+         "reason": decision.reason, "pressed": pressed, "guided": guided})
     await session.commit()
     return {"watching": True, "readable": True, "prompt": True,
             "answered": pressed, "approved": decision.approve, "pressed": pressed,
-            "needs_accessibility": needs_accessibility,
+            "guided": guided, "needs_accessibility": needs_accessibility,
             "action": prompt.action, "reason": decision.reason,
             "answer": prompt.approve_key if decision.approve else prompt.deny_key,
             "tail": tail}
@@ -977,7 +1015,7 @@ async def assistant_route(body: RouteRequest,
     from core.assistant import build_messages, parse_intent
     from core.cache import cached_call
 
-    msg = body.message.strip()
+    msg = body.message.strip()[:_MAX_ROUTE_CHARS]  # routing needs little (audit MED)
     if not msg:
         return {"intent": "chat"}
     if not providers.configured():
@@ -1008,7 +1046,8 @@ async def assistant_route(body: RouteRequest,
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session)) -> ChatResponse:
-    if not request.message.strip():
+    message = request.message.strip()[:_MAX_CHAT_CHARS]  # bound cost + context (audit MED)
+    if not message:
         raise HTTPException(status_code=400, detail="Empty message.")
     store = MemoryStore(session)
     owner = await store.get_owner()
@@ -1020,9 +1059,9 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
         if conversation is None:
             raise HTTPException(status_code=404, detail="Unknown conversation")
     else:
-        conversation = await store.create_conversation(owner.id, title=request.message[:200])
+        conversation = await store.create_conversation(owner.id, title=message[:200])
 
-    await store.add_message(conversation.id, "user", request.message)
+    await store.add_message(conversation.id, "user", message)
 
     facts = await store.list_facts(owner.id)
     history = await store.recent_messages(conversation.id, settings.history_window)
@@ -1030,7 +1069,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     messages += [{"role": m.role, "content": m.content} for m in history]
 
     # Cost-Accuracy Router (§5): classify → decide → dispatch.
-    task = await app.state.classifier.classify(request.message)
+    task = await app.state.classifier.classify(message)
     ollama_up = await app.state.ollama.is_up()
     input_tokens = sum(len(m["content"]) for m in messages) // 4  # rough chars/4
     try:
@@ -1069,8 +1108,12 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
         prompt_tokens = dispatched.get("prompt_tokens")
         completion_tokens = dispatched.get("completion_tokens")
 
+    # A reasoning model that got cut off can return empty content — never show the
+    # owner a blank reply (audit LOW).
+    reply_text = cached.content.strip() or "Sorry, I didn't catch that — could you rephrase?"
+
     class _R:
-        content = cached.content
+        content = reply_text
     result = _R()
 
     await log_decision(

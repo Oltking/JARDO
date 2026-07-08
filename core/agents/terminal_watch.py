@@ -224,3 +224,16 @@ def press_answer(prompt: PermissionPrompt, approve: bool,
                 "Grant Jardo Accessibility permission (System Settings → Privacy "
                 "& Security → Accessibility) so it can press the answer.") from exc
         raise
+
+
+def type_text(text: str, window_id: int | None = None) -> None:
+    """Type a full instruction line into the agent's input and submit it (used to
+    guide the agent after a decline so it adapts and keeps working, instead of
+    stalling). Delivered through Terminal's Apple Events, so it lands in the
+    session's stdin — the agent receives it as if the owner typed it.
+
+    Backticks are stripped so nothing can be shell-interpreted, and quotes/
+    backslashes are escaped for AppleScript."""
+    clean = text.replace("`", "'").strip()
+    esc = clean.replace("\\", "\\\\").replace('"', '\\"')
+    _osa(f'tell application "Terminal" to do script "{esc}" in {_target(window_id)}')

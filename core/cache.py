@@ -74,9 +74,18 @@ async def put_cached(session: AsyncSession, model: str, messages: list[dict],
         if m.get("role") == "user":
             preview = str(m.get("content", ""))[:300]
             break
-    session.add(ResponseCache(cache_key=key, model=model, request_preview=preview,
-                              response=response, per_call_tokens=per_call_tokens, hits=0))
-    await session.flush()
+    # A savepoint so a concurrent request that inserted the same key first raises a
+    # unique violation we can swallow — instead of poisoning the whole session
+    # (audit LOW: cache write race).
+    from sqlalchemy.exc import IntegrityError
+    try:
+        async with session.begin_nested():
+            session.add(ResponseCache(cache_key=key, model=model,
+                                      request_preview=preview, response=response,
+                                      per_call_tokens=per_call_tokens, hits=0))
+            await session.flush()
+    except IntegrityError:
+        return  # another request cached it first — fine, nothing to do
     # Only store the query embedding for semantic-eligible (single-shot) calls, so
     # context-dependent multi-turn entries can never be semantically cross-matched.
     if store_embedding:

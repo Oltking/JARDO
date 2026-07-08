@@ -517,9 +517,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         if (r.answered && r.action) {
           setNeedsAccess(false);
           const verb = r.approved ? "Approved" : "Declined";
-          const action = r.action.length > 90 ? r.action.slice(0, 90) + "…" : r.action;
-          say("event", `${verb} · ${action}`, r.approved);
-          await speak(`${verb}. ${action}`);
+          const action = r.action.length > 80 ? r.action.slice(0, 80) + "…" : r.action;
+          // On a decline, note that Jardo also told the agent to adapt & continue.
+          const tail = !r.approved && r.guided ? " → told it to adapt & keep going" : "";
+          say("event", `${verb} · ${action}${tail}`, r.approved);
+          await speak(r.approved ? `Approved. ${action}` : `Declined ${action}. Told it to keep going.`);
         }
       } catch {
         /* transient — keep watching */

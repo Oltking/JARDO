@@ -258,6 +258,7 @@ export interface TickResult {
   answered?: boolean;
   approved?: boolean;
   pressed?: boolean;
+  guided?: boolean; // after declining, Jardo told the agent how to adapt & continue
   needs_accessibility?: boolean;
   already?: boolean;
   action?: string;
