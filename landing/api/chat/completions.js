@@ -26,8 +26,10 @@ const GLOBAL_CAP_USD = process.env.GLOBAL_CAP_USD
   : null;
 
 // ---- metering store: Upstash REST if configured, else in-memory ------------
-const KV_URL = process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+// Accept either manual Upstash vars or the names Vercel's Marketplace integration
+// injects (KV_REST_API_*), so both setup paths work with no code change.
+const KV_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 const memSpend = new Map(); // deviceId -> usd (per warm instance)
 
 async function kv(path) {

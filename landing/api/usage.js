@@ -1,7 +1,7 @@
 // Report a device's remaining Jardo free trial. GET ?device=<id>.
 const FREE_TRIAL_USD = parseFloat(process.env.FREE_TRIAL_USD || "1");
-const KV_URL = process.env.UPSTASH_REDIS_REST_URL;
-const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const KV_URL = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const KV_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
 module.exports = async (req, res) => {
   const device = String((req.query && req.query.device) || "").slice(0, 128);
