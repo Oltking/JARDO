@@ -34,12 +34,49 @@ class SpeechToText:
         # clips (observed: silence transcribed as Russian). Set None to auto-detect.
         self._language = language
         self._model = None
+        # Serialize model init so the background warmup and a live transcribe call
+        # can't both instantiate/download the model at once (a crash-prone race).
+        import threading
+        self._load_lock = threading.Lock()
+
+    def _bundled_dir(self) -> str | None:
+        """A model shipped inside a frozen (offline) build, if present."""
+        import os
+        bundle = os.environ.get("JARDO_BUNDLE_DIR")
+        if bundle:
+            cand = os.path.join(bundle, "models", "whisper", self._model_size)
+            if os.path.isfile(os.path.join(cand, "model.bin")):
+                return cand
+        return None
+
+    def _repo_id(self) -> str:
+        return f"Systran/faster-whisper-{self._model_size}"
+
+    def is_ready(self) -> bool:
+        """True if the model can load without a network download: already loaded,
+        bundled in the app, or present in the standard Hugging Face cache (which is
+        where faster-whisper keeps it — including copies from before this build)."""
+        if self._model is not None or self._bundled_dir() is not None:
+            return True
+        try:
+            from huggingface_hub import try_to_load_from_cache
+            hit = try_to_load_from_cache(self._repo_id(), "model.bin")
+            return isinstance(hit, str)
+        except Exception:  # noqa: BLE001 — if we can't tell, assume not cached
+            return False
 
     def _ensure_model(self):
         if self._model is None:
-            from faster_whisper import WhisperModel  # lazy: heavy import + model load
-            self._model = WhisperModel(self._model_size, device="cpu",
-                                       compute_type=self._compute_type)
+            with self._load_lock:
+                if self._model is None:  # re-check inside the lock
+                    from faster_whisper import WhisperModel  # lazy: heavy load
+                    # Prefer a bundled copy; otherwise let faster-whisper use its
+                    # DEFAULT cache (~/.cache/huggingface or $HF_HOME) so an
+                    # already-downloaded model is reused and a fresh one is fetched
+                    # once (~180 MB) to the standard location.
+                    source = self._bundled_dir() or self._model_size
+                    self._model = WhisperModel(source, device="cpu",
+                                               compute_type=self._compute_type)
         return self._model
 
     def warmup(self) -> None:

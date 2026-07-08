@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import secrets
 from core.config import settings
-from core.db import engine, get_session
+from core.db import engine, get_session, init_db, is_sqlite
 from core.inference import providers
 from core.inference.fireworks import FireworksClient, FireworksError
 from core.inference.ollama import OllamaClient, OllamaUnavailable
@@ -28,9 +28,35 @@ from core.router.router import BudgetExceeded, CostRouter, RouteDecision, Router
 from core.router.spend import log_decision, spent_today_usd
 
 
+def _embedded_queue():
+    """In-process queue + report scheduler for the self-contained (SQLite) build,
+    mirroring core.worker.WorkerSettings without Redis/Arq."""
+    from core.inproc_queue import InProcessQueue
+    from core.worker import (
+        daily_report,
+        extract_facts,
+        hourly_report,
+        weekly_report,
+    )
+
+    queue = InProcessQueue({"extract_facts": extract_facts})
+    queue.start_scheduler([
+        (hourly_report, lambda n: n.minute == 0),
+        (daily_report, lambda n: n.hour == 7 and n.minute == 5),
+        (weekly_report, lambda n: n.weekday() == 0 and n.hour == 7 and n.minute == 10),
+    ])
+    return queue
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.arq = await create_pool(RedisSettings.from_dsn(settings.redis_url))
+    if is_sqlite():
+        # Embedded build: create tables from the models (no Alembic) and run jobs
+        # in-process instead of requiring Postgres + Redis.
+        await init_db()
+        app.state.arq = _embedded_queue()
+    else:
+        app.state.arq = await create_pool(RedisSettings.from_dsn(settings.redis_url))
     app.state.ollama = OllamaClient()
     config = RouterConfig.load()
     app.state.router = CostRouter(config)
@@ -247,6 +273,7 @@ async def set_provider(name: str, body: ProviderKeyRequest) -> dict:
 class IdentityRequest(BaseModel):
     name: str | None = None
     pronoun_style: str | None = None  # "sir" | "ma"
+    email: str | None = None          # optional; a local placeholder is used if absent
 
 
 @app.get("/settings/identity")
@@ -260,9 +287,25 @@ async def get_identity(session: AsyncSession = Depends(get_session)) -> dict:
 @app.post("/settings/identity")
 async def set_identity(body: IdentityRequest,
                        session: AsyncSession = Depends(get_session)) -> dict:
-    owner = await MemoryStore(session).get_owner()
+    store = MemoryStore(session)
+    owner = await store.get_owner()
     if owner is None:
-        raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
+        # First-run onboarding, in-app (no CLI). A shipped user has no terminal,
+        # so entering a name here creates the owner record + device keypair.
+        if not (body.name and body.name.strip()):
+            raise HTTPException(status_code=400,
+                                detail="Tell me your name to get started.")
+        import re
+
+        from core.identity import create_owner
+        name = body.name.strip()[:120]
+        pronoun = body.pronoun_style if body.pronoun_style in ("sir", "ma") else "sir"
+        slug = re.sub(r"[^a-z0-9]+", "", name.lower()) or "owner"
+        email = (body.email or "").strip() or f"{slug}@jardo.local"
+        owner = await create_owner(session, name, pronoun, email)
+        await store.audit("app", "owner.created", {"owner_id": str(owner.id)})
+        await session.commit()
+        return {"name": owner.name, "pronoun_style": owner.pronoun_style}
     if body.name and body.name.strip():
         owner.name = body.name.strip()[:120]
     if body.pronoun_style in ("sir", "ma"):
@@ -374,6 +417,9 @@ class StartProjectRequest(BaseModel):
     name: str | None = None
     location: str | None = None      # parent dir; defaults to the projects root
     existing_path: str | None = None  # resume/onboard an existing folder instead
+    details: str | None = None        # owner's fuller description of what to build
+    spec_text: str | None = None      # contents of an attached spec file (optional)
+    spec_filename: str | None = None  # original filename of the attached spec
 
 
 @app.post("/projects/start")
@@ -417,8 +463,11 @@ async def projects_start(body: StartProjectRequest,
         parent = body.location or appsettings.get("projects_root")
         if not parent:
             return {"needs_root": True}  # UI prompts the owner to pick a root
-        proj = onboard.scaffold_project(parent, body.name or onboard.derive_name(body.goal),
-                                        body.goal, body.agent)
+        proj = onboard.scaffold_project(
+            parent, body.name or onboard.derive_name(body.goal),
+            body.goal, body.agent,
+            details=body.details, spec_text=body.spec_text,
+            spec_filename=body.spec_filename)
         path, name, created = proj.path, proj.name, proj.created
 
     await ProjectStore(session).upsert(owner.id, path, name=name, goal=body.goal.strip())
@@ -488,18 +537,30 @@ async def voice_status() -> dict:
     devices = await run_in_threadpool(mic.list_input_devices)
     selected = await run_in_threadpool(mic.pick_builtin_mic)
     # Warm the STT model in the background so the first spoken turn isn't slow
-    # (the model-load cost is paid now, while the app is just opening).
+    # (the model-load cost is paid now, while the app is just opening). On a fresh
+    # install this also DOWNLOADS the model (~180 MB) once — we flag that so the UI
+    # can show a one-time "setting up voice" state without blocking chat.
     if not hasattr(app.state, "stt"):
         import threading
         from core.voice.stt import SpeechToText
         app.state.stt = SpeechToText(settings.voice_stt_model)
-        threading.Thread(target=app.state.stt.warmup, daemon=True).start()
+        app.state.voice_downloading = not app.state.stt.is_ready()
+
+        def _warm():
+            try:
+                app.state.stt.warmup()
+            finally:
+                app.state.voice_downloading = False
+
+        threading.Thread(target=_warm, daemon=True).start()
     voice_label = (
         "Piper (neural)" if settings.voice_tts_backend == "piper"
         else settings.voice_tts_voice
     )
     return {
         "available": True,
+        "model_ready": app.state.stt.is_ready(),
+        "model_downloading": bool(getattr(app.state, "voice_downloading", False)),
         "tts_backend": settings.voice_tts_backend,
         "tts_voice": voice_label,
         "input_devices": [{"index": i, "name": n} for i, n in devices],
@@ -519,16 +580,31 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
     if not hasattr(app.state, "stt"):
         app.state.stt = SpeechToText(settings.voice_stt_model)
 
-    if request.auto_stop:
-        audio = await run_in_threadpool(
-            mic.record_until_silence, request.max_seconds,
-            settings.voice_silence_ms, request.listen_timeout)
-    else:
-        audio = await run_in_threadpool(mic.record_seconds, request.seconds)
-    heard = bool(audio.size)
-    amplitude = (float(np.abs(audio.astype(np.float32) / 32768.0).max())
-                 if heard else 0.0)
-    transcript = await run_in_threadpool(app.state.stt.transcribe, audio) if heard else ""
+    # First run: the speech model may still be downloading (~180 MB). Don't record
+    # or block on the download here — answer instantly so the client can show the
+    # "setting up voice" state instead of the request timing out.
+    if not app.state.stt.is_ready():
+        return {"transcript": "", "amplitude": 0.0, "heard": False,
+                "model_pending": True}
+
+    # Recording (PortAudio) and transcription must never 500 or crash the core —
+    # a denied mic or a transient audio error just means "nothing heard".
+    try:
+        if request.auto_stop:
+            audio = await run_in_threadpool(
+                mic.record_until_silence, request.max_seconds,
+                settings.voice_silence_ms, request.listen_timeout)
+        else:
+            audio = await run_in_threadpool(mic.record_seconds, request.seconds)
+        heard = bool(audio.size)
+        amplitude = (float(np.abs(audio.astype(np.float32) / 32768.0).max())
+                     if heard else 0.0)
+        transcript = await run_in_threadpool(app.state.stt.transcribe, audio) if heard else ""
+    except Exception as exc:  # noqa: BLE001 — voice is best-effort, never fatal
+        import logging
+        logging.getLogger("jardo.voice").warning("transcribe failed: %s", exc)
+        return {"transcript": "", "amplitude": 0.0, "heard": False,
+                "error": str(exc)[:200]}
     # heard=false means no speech within listen_timeout (silence) — callers use
     # this to end an auto-listen session.
     return {"transcript": transcript, "amplitude": round(amplitude, 4), "heard": heard}

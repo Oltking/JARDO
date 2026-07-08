@@ -55,14 +55,32 @@ def derive_name(goal: str) -> str:
     return slugify(" ".join(kept) or "project")
 
 
-def brief_for(agent: str, name: str, goal: str) -> tuple[str, str]:
-    """(filename, contents) of the agent's project-memory brief."""
+def brief_for(agent: str, name: str, goal: str,
+              details: str | None = None, has_spec: bool = False) -> tuple[str, str]:
+    """(filename, contents) of the agent's project-memory brief.
+
+    `goal` is the one-line objective; `details` is the owner's fuller description
+    of what they want built (the real substance the agent works from). If the
+    owner attached a spec file, we point the agent at SPEC.md as the source of
+    truth so the whole document is in play, not just a sentence."""
     filename = "GEMINI.md" if agent == "gemini" else "CLAUDE.md"
-    body = f"# {name}\n\n## Goal\n{goal.strip()}\n\n{_WORK_GUIDANCE}"
-    return filename, body
+    parts = [f"# {name}", "", "## Goal", goal.strip()]
+    if details and details.strip():
+        parts += ["", "## What we're building", details.strip()]
+    if has_spec:
+        parts += ["", "## Full specification",
+                  "The owner provided a detailed spec in **SPEC.md** in this folder. "
+                  "Read it first and treat it as the source of truth for scope, "
+                  "requirements, and acceptance. If it conflicts with the one-line "
+                  "goal above, the spec wins."]
+    parts += ["", _WORK_GUIDANCE]
+    return filename, "\n".join(parts)
 
 
-def scaffold_project(parent: str, name: str, goal: str, agent: str) -> NewProject:
+def scaffold_project(parent: str, name: str, goal: str, agent: str,
+                     details: str | None = None,
+                     spec_text: str | None = None,
+                     spec_filename: str | None = None) -> NewProject:
     parent = os.path.abspath(os.path.expanduser(parent))
     os.makedirs(parent, exist_ok=True)
     slug = slugify(name)
@@ -72,7 +90,15 @@ def scaffold_project(parent: str, name: str, goal: str, agent: str) -> NewProjec
         path, n = f"{base}-{n}", n + 1
     os.makedirs(path)
     subprocess.run(["git", "-C", path, "init", "-q"], capture_output=True)
-    filename, body = brief_for(agent, os.path.basename(path), goal)
+    has_spec = bool(spec_text and spec_text.strip())
+    if has_spec:
+        header = f"# Specification\n\n_Provided by the owner"
+        if spec_filename:
+            header += f" ({os.path.basename(spec_filename)})"
+        header += "._\n\n"
+        with open(os.path.join(path, "SPEC.md"), "w", encoding="utf-8") as f:
+            f.write(header + spec_text.strip() + "\n")
+    filename, body = brief_for(agent, os.path.basename(path), goal, details, has_spec)
     with open(os.path.join(path, filename), "w", encoding="utf-8") as f:
         f.write(body)
     return NewProject(path=path, name=os.path.basename(path), created=True)

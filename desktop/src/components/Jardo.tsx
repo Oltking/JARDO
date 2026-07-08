@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { HalftoneAvatar } from "./HalftoneAvatar";
 import {
   chooseProject,
   getIdentity,
@@ -39,6 +40,38 @@ type Phase = "idle" | "listening" | "thinking" | "speaking";
 interface Supervising {
   goal: string;
   agent: string;
+}
+
+// New-project intake: collected in a small form before we scaffold anything, so
+// the owner names it and describes it properly (and can attach a spec file)
+// instead of the agent building from a one-line guess.
+interface Intake {
+  name: string;
+  goal: string;
+  details: string;
+  agent: string;
+  specText: string | null;
+  specFilename: string | null;
+  spoken: boolean;
+}
+
+// A short, human folder name from a spoken goal ("build a landing page for my
+// bakery" → "landing page bakery"). The backend still slugifies; this is only a
+// friendly default the owner can edit.
+function suggestName(goal: string): string {
+  const skip = new Set([
+    "build", "create", "make", "start", "a", "an", "the", "me", "my", "new",
+    "project", "please", "for", "with", "using", "of", "to", "app", "some",
+    "that", "this", "spin", "up", "scaffold", "set",
+  ]);
+  const words = goal
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !skip.has(w))
+    .slice(0, 4);
+  const name = words.join(" ").trim();
+  return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : "New Project";
 }
 
 // Speech-to-text routinely mangles "Claude" → "cloud/clod/claud" and "supervise"
@@ -163,6 +196,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const [needsAccess, setNeedsAccess] = useState(false);
   const [micPaused, setMicPaused] = useState(false); // pause the always-on mic
   const [noKey, setNoKey] = useState(false); // first-run: no model key configured
+  const [intake, setIntake] = useState<Intake | null>(null); // new-project form
 
   const runningRef = useRef(false);
   const convRef = useRef<string | null>(null);
@@ -173,17 +207,6 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
   const nameRef = useRef<string | null>(null);
-
-  // Ref callback that guarantees the avatar autoplays and loops. WebKit blocks
-  // autoplay unless the `muted` *property* is set (React's `muted` attribute is
-  // unreliable), and a paused video shows a play-button overlay — so we mute and
-  // play imperatively and never pause it. The glow (via className) shows state.
-  const playMuted = useCallback((el: HTMLVideoElement | null) => {
-    if (!el) return;
-    el.muted = true;
-    el.loop = true;
-    void el.play().catch(() => undefined);
-  }, []);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
@@ -209,6 +232,17 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
   useEffect(() => {
     voiceStatus().then(setStatus).catch((e: ApiError) => setError(e.message));
+    // First run downloads the voice model once (~180 MB). Poll until it's ready
+    // so the banner clears itself; chat/supervision work throughout.
+    const poll = window.setInterval(async () => {
+      try {
+        const s = await voiceStatus();
+        setStatus(s);
+        if (s.model_ready || s.available === false) window.clearInterval(poll);
+      } catch {
+        /* ignore transient errors */
+      }
+    }, 3000);
     getIdentity()
       .then((id) => {
         nameRef.current = id.name;
@@ -219,6 +253,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       .catch(() => undefined);
     return () => {
       runningRef.current = false;
+      window.clearInterval(poll);
     };
   }, []);
 
@@ -271,7 +306,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       const p = pendingRef.current;
       pendingRef.current = null;
       if (isAffirmative(raw)) {
-        await startNewProject(p, spoken);
+        setIntake({
+          name: suggestName(p.goal), goal: p.goal, details: "", agent: p.agent,
+          specText: null, specFilename: null, spoken,
+        });
         return;
       }
       if (isNegative(raw)) {
@@ -361,9 +399,18 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       return;
     }
     if (action === "new_project" && !superRef.current) {
-      // Don't scaffold + spawn an agent off one utterance — confirm first.
-      pendingRef.current = { goal, agent };
-      const line = `Start a new ${agent === "gemini" ? "Gemini" : "Claude"} project for that and set it up in your terminal? Say yes to go ahead.`;
+      // Don't scaffold + spawn an agent off one utterance. Open an intake form so
+      // the owner names it and describes what to build (and can attach a spec).
+      setIntake({
+        name: suggestName(goal),
+        goal,
+        details: "",
+        agent,
+        specText: null,
+        specFilename: null,
+        spoken,
+      });
+      const line = `Let's set that up properly. I've opened a quick form — give it a name and tell me more about what you want built. You can attach a spec file too.`;
       say("jardo", line);
       if (spoken) await speak(line);
       return;
@@ -408,12 +455,47 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     if (runningRef.current) return;
     runningRef.current = true;
     setError(null);
+    let silentStreak = 0; // consecutive cycles where the mic captured nothing
     try {
       while (runningRef.current) {
         setPhase("listening");
         const heard = await voiceTranscribe(6);
         if (!runningRef.current) break;
-        if (!heard.heard || !heard.transcript.trim()) continue; // silence → keep listening
+
+        // The speech model is still downloading (first run). The banner already
+        // explains it; slow the loop so we don't spin, and keep waiting.
+        if (heard.model_pending) {
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        // Recording/transcription failed — surface it instead of silently looping.
+        // A denied microphone is the common case; say so plainly.
+        if (heard.error) {
+          setError(
+            /permission|denied|access|coreaudio|portaudio|-50|input/i.test(heard.error)
+              ? "I can't access the microphone. Grant Jardo access in System Settings → Privacy & Security → Microphone, then I'll hear you."
+              : `Voice error: ${heard.error}`
+          );
+          await new Promise((r) => setTimeout(r, 2500));
+          continue;
+        }
+        setError(null);
+
+        if (!heard.heard || !heard.transcript.trim()) {
+          // Nothing heard. If the mic is truly silent (amplitude ~0) many times
+          // in a row, the mic probably isn't reaching us — tell the owner once.
+          if (heard.amplitude < 0.002) {
+            silentStreak += 1;
+            if (silentStreak === 6) {
+              setError(
+                "I'm listening but not picking up any sound. Check that the right microphone is selected and that Jardo has Microphone permission."
+              );
+            }
+          }
+          continue; // silence → keep listening
+        }
+        silentStreak = 0;
+        setError(null);
         // Drop anything captured while (or just after) Jardo was speaking — that's
         // Jardo hearing itself, not the owner.
         if (speakingRef.current || Date.now() < suppressUntilRef.current) continue;
@@ -458,16 +540,45 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   }
 
   // ---- new-project onboarding conductor -------------------------------------
-  async function startNewProject(intent: Supervising, spoken: boolean) {
+  // ---- new-project intake form ----------------------------------------------
+  async function attachSpecFile(file: File) {
+    // Read the spec as text in the browser (no Tauri fs permission needed). Text
+    // formats only — we can't parse binary docs like .pdf/.docx.
+    try {
+      const text = await file.text();
+      setIntake((cur) =>
+        cur ? { ...cur, specText: text, specFilename: file.name } : cur
+      );
+    } catch {
+      setError("Couldn't read that file. Use a text spec (.md, .txt, …).");
+    }
+  }
+
+  async function submitIntake() {
+    if (!intake) return;
+    const it = intake;
+    if (!it.name.trim() || !(it.details.trim() || it.goal.trim())) return;
+    setIntake(null);
+    await startNewProject(it);
+  }
+
+  async function startNewProject(intent: Intake) {
+    const spoken = intent.spoken;
+    const extra = {
+      name: intent.name.trim() || null,
+      details: intent.details.trim() || null,
+      specText: intent.specText,
+      specFilename: intent.specFilename,
+    };
     setPhase("thinking");
     try {
-      let res = await startProject(intent.goal, intent.agent);
+      let res = await startProject(intent.goal, intent.agent, extra);
       if (res.needs_root) {
         const ask = "First, where should I keep your projects? Pick the folder that holds them.";
         say("jardo", ask);
         if (spoken) await speak(ask);
         await setProjectsRoot(null); // native folder chooser
-        res = await startProject(intent.goal, intent.agent);
+        res = await startProject(intent.goal, intent.agent, extra);
       }
       if (res.ok) {
         const where = res.launched
@@ -670,6 +781,110 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         </div>
       )}
 
+      {intake && (
+        <div className="intake-backdrop" onClick={() => setIntake(null)}>
+          <div
+            className="intake"
+            role="dialog"
+            aria-label="New project"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="intake-title">New project</h2>
+            <p className="intake-sub">
+              Name it and tell me what to build. The more detail you give, the
+              better {intake.agent === "gemini" ? "Gemini" : "Claude"} starts.
+            </p>
+
+            <label className="intake-field">
+              <span>Name</span>
+              <input
+                type="text"
+                value={intake.name}
+                autoFocus
+                placeholder="my-project"
+                onChange={(e) => setIntake({ ...intake, name: e.target.value })}
+              />
+            </label>
+
+            <label className="intake-field">
+              <span>What do you want built?</span>
+              <textarea
+                value={intake.details}
+                rows={5}
+                placeholder={intake.goal || "Describe the app, its purpose, key features, stack, and anything that matters…"}
+                onChange={(e) => setIntake({ ...intake, details: e.target.value })}
+              />
+            </label>
+
+            <div className="intake-attach">
+              {intake.specFilename ? (
+                <span className="intake-file">
+                  📎 {intake.specFilename}
+                  <button
+                    className="link-btn"
+                    onClick={() => setIntake({ ...intake, specText: null, specFilename: null })}
+                  >
+                    remove
+                  </button>
+                </span>
+              ) : (
+                <label className="intake-filebtn">
+                  📎 Attach a spec file
+                  <input
+                    type="file"
+                    accept=".md,.markdown,.txt,.text,.rst,.json,.yaml,.yml"
+                    hidden
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void attachSpecFile(f);
+                    }}
+                  />
+                </label>
+              )}
+              <span className="intake-agent">
+                Agent:
+                <select
+                  value={intake.agent}
+                  onChange={(e) => setIntake({ ...intake, agent: e.target.value })}
+                >
+                  <option value="claude">Claude</option>
+                  <option value="gemini">Gemini</option>
+                </select>
+              </span>
+            </div>
+
+            <div className="intake-actions">
+              <button className="btn-ghost" onClick={() => setIntake(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                disabled={!intake.name.trim() || !(intake.details.trim() || intake.goal.trim())}
+                onClick={submitIntake}
+              >
+                Create &amp; launch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {status && status.available === false && (
+        <div className="banner warn" role="alert">
+          Voice is off: {status.reason || "the voice components aren't available."}{" "}
+          You can still type to me.
+        </div>
+      )}
+      {status?.available && status.model_ready === false && (
+        <div className="banner hint">
+          <span className="dl-spinner" aria-hidden="true" />
+          <span>
+            Setting up voice — downloading the speech model once (~180&nbsp;MB).
+            You can chat and supervise now; talking will work as soon as it's done.
+          </span>
+        </div>
+      )}
+
       {needsSetup && (
         <div className="banner warn" role="alert">
           Jardo isn't set up yet. Run <code>jardo setup</code>, then talk to me.
@@ -702,20 +917,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       <div className="stream" ref={scrollRef}>
         {lines.length === 0 && (
           <div className="empty welcome">
-            <video
-              ref={playMuted}
-              className={`welcome-avatar ${avatarState}`}
-              src="/jardo-avatar.mp4"
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              onCanPlay={(e) => {
-                e.currentTarget.muted = true;
-                void e.currentTarget.play().catch(() => undefined);
-              }}
-            />
+            <span className={`welcome-avatar ${avatarState}`}>
+              <HalftoneAvatar state={avatarState} size={132} />
+            </span>
             <p className="welcome-title">Jardo</p>
             <p className="welcome-sub">
               I'm listening. Say “where am I?” to pick up where you left off, or
@@ -739,20 +943,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
       <div className="dock">
         <span className={`dock-avatar-slot ${avatarState}`}>
-          <video
-            ref={playMuted}
-            className={`dock-avatar ${avatarState}`}
-            src="/jardo-avatar.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            onCanPlay={(e) => {
-              e.currentTarget.muted = true;
-              void e.currentTarget.play().catch(() => undefined);
-            }}
-          />
+          <HalftoneAvatar state={avatarState} size={44} className={`dock-avatar ${avatarState}`} />
         </span>
         <span className="live-label">
           {micPaused ? "mic paused" : phaseLabel[phase]}

@@ -211,19 +211,29 @@ export interface StartProjectResult {
   launched?: boolean;
 }
 
+export interface NewProjectDetails {
+  name?: string | null;
+  location?: string | null;
+  details?: string | null;
+  specText?: string | null;
+  specFilename?: string | null;
+}
+
 export async function startProject(
   goal: string,
   agent: string,
-  name: string | null = null,
-  location: string | null = null
+  extra: NewProjectDetails = {}
 ): Promise<StartProjectResult> {
   try {
     return await invoke<StartProjectResult>("start_project", {
       goal,
       agent,
-      name,
-      location,
+      name: extra.name ?? null,
+      location: extra.location ?? null,
       existingPath: null,
+      details: extra.details ?? null,
+      specText: extra.specText ?? null,
+      specFilename: extra.specFilename ?? null,
     });
   } catch (e) {
     throw toApiError(e);
@@ -361,6 +371,8 @@ export interface VoiceInputDevice {
 export interface VoiceStatus {
   available: boolean;
   reason?: string;
+  model_ready?: boolean; // whisper model present (false = first-run download pending)
+  model_downloading?: boolean; // one-time model fetch in progress
   tts_backend?: string;
   tts_voice?: string;
   input_devices?: VoiceInputDevice[];
@@ -371,6 +383,8 @@ export interface TranscribeResult {
   transcript: string;
   amplitude: number;
   heard: boolean; // false = no speech within the listen timeout (silence)
+  model_pending?: boolean; // speech model still downloading (first run)
+  error?: string; // recording/transcription failed (e.g. mic denied)
 }
 
 export async function voiceStatus(): Promise<VoiceStatus> {
