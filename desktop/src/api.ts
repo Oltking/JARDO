@@ -252,6 +252,22 @@ export async function getProjectsRoot(): Promise<{ root: string | null }> {
   return invoke<{ root: string | null }>("get_projects_root");
 }
 
+export interface TerminalChoice {
+  terminal: string;
+  supported: string[];
+  hook_only: string[];
+}
+
+export async function getTerminalChoice(): Promise<TerminalChoice> {
+  return invoke<TerminalChoice>("get_terminal_choice");
+}
+
+export async function setTerminalChoice(
+  terminal: string
+): Promise<{ terminal: string; scriptable: boolean }> {
+  return invoke("set_terminal_choice", { terminal });
+}
+
 export async function setProjectsRoot(
   path: string | null
 ): Promise<{ root: string }> {

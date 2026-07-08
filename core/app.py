@@ -272,6 +272,28 @@ class WhereAmIRequest(BaseModel):
     path: str | None = None  # None → most-recently-opened project
 
 
+class TerminalChoiceRequest(BaseModel):
+    terminal: str
+
+
+@app.get("/settings/terminal")
+async def get_terminal_choice() -> dict:
+    from core import appsettings
+    from core.agents.terminals import SUPPORTED
+    current = appsettings.get("supervise_terminal") or settings.supervise_terminal
+    return {"terminal": current, "supported": list(SUPPORTED),
+            "hook_only": ["warp", "vscode"]}
+
+
+@app.post("/settings/terminal")
+async def set_terminal_choice(body: TerminalChoiceRequest) -> dict:
+    from core import appsettings
+    appsettings.set("supervise_terminal", body.terminal.strip().lower())
+    from core.agents import terminal_watch
+    return {"terminal": body.terminal.strip().lower(),
+            "scriptable": terminal_watch.supervised_terminal_ok()}
+
+
 @app.get("/settings/projects-root")
 async def get_projects_root() -> dict:
     from core import appsettings

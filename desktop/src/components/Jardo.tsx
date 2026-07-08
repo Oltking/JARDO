@@ -160,6 +160,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [needsAccess, setNeedsAccess] = useState(false);
+  const [micPaused, setMicPaused] = useState(false); // pause the always-on mic
 
   const runningRef = useRef(false);
   const convRef = useRef<string | null>(null);
@@ -216,11 +217,22 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     };
   }, []);
 
-  // Always-on: start listening as soon as the app is up.
+  // Always-on: start listening as soon as the app is up (unless paused).
   useEffect(() => {
-    if (autoStart && status?.available && !runningRef.current) listenLoop();
+    if (autoStart && !micPaused && status?.available && !runningRef.current) listenLoop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, status?.available]);
+
+  function toggleMic() {
+    if (micPaused) {
+      setMicPaused(false);
+      if (status?.available) listenLoop();
+    } else {
+      setMicPaused(true);
+      runningRef.current = false; // stop after the current frame
+      setPhase("idle");
+    }
+  }
 
   // Kill-switch — a real halt (audit #2). Stops the always-on voice loop and the
   // supervision tick, so Jardo immediately stops listening and stops pressing
@@ -714,7 +726,18 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           muted
           playsInline
         />
-        <span className="live-label">{phaseLabel[phase]}</span>
+        <span className="live-label">
+          {micPaused ? "mic paused" : phaseLabel[phase]}
+        </span>
+        {status?.available && (
+          <button
+            className={`mic-toggle ${micPaused ? "paused" : ""}`}
+            onClick={toggleMic}
+            title={micPaused ? "Resume listening" : "Pause listening"}
+          >
+            {micPaused ? "🔇" : "🎙"}
+          </button>
+        )}
         <textarea
           value={input}
           placeholder="…or type to Jardo"

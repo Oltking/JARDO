@@ -139,9 +139,12 @@ from core.agents.terminals import AccessibilityDenied  # noqa: E402,F401 (re-exp
 
 
 def _driver():
+    from core import appsettings
     from core.agents.terminals import get_driver
     from core.config import settings
-    return get_driver(settings.supervise_terminal)
+    # Runtime override (Settings UI) wins over the env default.
+    name = appsettings.get("supervise_terminal") or settings.supervise_terminal
+    return get_driver(name)
 
 
 def supervised_terminal_ok() -> bool:

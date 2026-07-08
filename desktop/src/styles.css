@@ -1410,3 +1410,21 @@ code {
 .drawer-body h2:first-child { margin-top: 0; }
 .drawer-body { font-size: 13px; }
 .drawer-body .empty { color: var(--faint); padding: 24px 0; text-align: center; }
+
+/* ---- Conversation width cap (wide windows) + mic toggle ---- */
+.stream { align-items: center; }
+.stream > .line { width: 100%; max-width: 720px; }
+.stream > .empty { max-width: 720px; }
+.mic-toggle {
+  background: var(--elev); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--dim); font-size: 14px; padding: 7px 10px; cursor: pointer; flex: none;
+}
+.mic-toggle:hover { border-color: var(--dim); }
+.mic-toggle.paused { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.settings-note {
+  font-size: 12px; color: var(--dim); margin: 8px 0 0; line-height: 1.5;
+}
+.settings-note code {
+  font-family: var(--mono); background: var(--bg); border: 1px solid var(--line);
+  padding: 1px 5px; border-radius: 4px;
+}

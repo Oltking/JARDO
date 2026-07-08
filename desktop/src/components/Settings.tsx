@@ -3,9 +3,11 @@ import {
   getIdentity,
   getProviders,
   getProjectsRoot,
+  getTerminalChoice,
   setIdentity,
   setProvider,
   setProjectsRoot,
+  setTerminalChoice,
   type ApiError,
   type ProviderStatus,
 } from "../api";
@@ -25,6 +27,16 @@ export function Settings() {
   const [pronoun, setPronoun] = useState("sir");
   const [root, setRoot] = useState<string | null>(null);
   const [savedName, setSavedName] = useState(false);
+  const [terminal, setTerminal] = useState("terminal");
+
+  async function pickTerminal(value: string) {
+    setTerminal(value);
+    try {
+      await setTerminalChoice(value);
+    } catch (e) {
+      setError((e as ApiError).message);
+    }
+  }
 
   async function saveIdentity() {
     setError(null);
@@ -69,6 +81,9 @@ export function Settings() {
       .catch(() => undefined);
     getProjectsRoot()
       .then((r) => setRoot(r.root))
+      .catch(() => undefined);
+    getTerminalChoice()
+      .then((t) => setTerminal(t.terminal))
       .catch(() => undefined);
   }, []);
 
@@ -140,6 +155,33 @@ export function Settings() {
             {root ? "Change…" : "Choose…"}
           </button>
         </div>
+      </div>
+
+      <h2>Terminal</h2>
+      <p className="settings-lead">
+        Which terminal you run your coding agent in — so Jardo can read it and
+        answer its prompts.
+      </p>
+      <div className="provider-card">
+        <label className="field">
+          <span>Supervise in</span>
+          <select
+            value={terminal}
+            onChange={(e) => pickTerminal(e.target.value)}
+            className="settings-select"
+          >
+            <option value="terminal">Terminal.app</option>
+            <option value="iterm">iTerm2</option>
+            <option value="warp">Warp (via hook)</option>
+            <option value="vscode">VS Code (via hook)</option>
+          </select>
+        </label>
+        {(terminal === "warp" || terminal === "vscode") && (
+          <p className="settings-note">
+            Warp and VS Code can't be read directly — supervise Claude via the
+            hook: run <code>jardo hook install</code>. It works in any terminal.
+          </p>
+        )}
       </div>
 
       <h2>Providers</h2>
