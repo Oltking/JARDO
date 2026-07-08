@@ -94,11 +94,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
         {step === "key" && (
           <>
-            <h1 className="onboard-title">One optional step.</h1>
+            <h1 className="onboard-title">You're set — the first $1 is on me.</h1>
             <p className="onboard-sub">
-              Paste a Fireworks API key for sharper answers, or skip and I'll run on
-              the small local model. You can add or change this anytime in Settings.
-              Your key is stored in the macOS Keychain, never in a file.
+              Skip this and start right away on your free trial; I'll think, talk, and
+              supervise with no key needed. When it runs out, paste your own Fireworks
+              key here (or later in Settings) to keep going at cost. Keys live in the
+              macOS Keychain, never in a file.
             </p>
             <label className="onboard-field">
               <span>Fireworks API key (optional)</span>

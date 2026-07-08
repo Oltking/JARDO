@@ -29,9 +29,10 @@
     </a>
     <nav class="nav__links" aria-label="Primary">
       <a href="#supervise">Supervise</a>
+      <a href="#demo">Demo</a>
       <a href="#how">How it works</a>
       <a href="#trust">Security</a>
-      <a href="#cost">Cost</a>
+      <a href="#trial">Free trial</a>
     </nav>
     <a class="btn btn--ghost nav__cta" href="#download">Download</a>
   </header>
@@ -57,6 +58,9 @@
           </a>
           <a class="btn btn--ghost" href="#supervise">See how it supervises</a>
         </div>
+        <p class="hero__trial reveal">
+          <span class="dot"></span> $1 of AI free on us. No key, no signup. It just talks.
+        </p>
         <p class="hero__note reveal">Windows, coming soon. No account. No telemetry.</p>
       </div>
       <div class="hero__scroll" aria-hidden="true"><span></span></div>
@@ -128,6 +132,34 @@
       </ol>
     </section>
 
+    <!-- ───────────────────────── live sample ───────────────────────── -->
+    <section class="demo" id="demo">
+      <div class="demo__copy reveal">
+        <p class="eyebrow">See it work</p>
+        <h2>You talk. It runs the agent, and stands guard.</h2>
+        <p class="demo__lede">
+          A real session: you ask by voice, Jardo scaffolds the project and launches
+          Claude in your terminal, then answers each permission prompt against your
+          goal. Safe and on-task gets a yes. Destructive or off-track gets a no, and
+          it tells the agent to keep moving.
+        </p>
+        <ul class="demo__points">
+          <li>Approves reads, tests, builds, in-project git</li>
+          <li>Declines anything destructive or off-goal</li>
+          <li>“Where am I?” brings you back in one line</li>
+        </ul>
+      </div>
+      <div class="demo__stage reveal">
+        <div class="term" id="term" aria-label="Sample Jardo session">
+          <div class="term__bar">
+            <span></span><span></span><span></span>
+            <em>jardo</em>
+          </div>
+          <div class="term__body" id="termBody"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ───────────────────────── cost ───────────────────────── -->
     <section class="cost" id="cost">
       <div class="cost__copy reveal">
@@ -174,13 +206,39 @@
       </div>
     </section>
 
+    <!-- ───────────────────────── free trial / powered by ───────────────────────── -->
+    <section class="trial" id="trial">
+      <div class="trial__inner reveal">
+        <p class="eyebrow">On the house</p>
+        <h2>$1 of AI, free. No key, no signup.</h2>
+        <p class="trial__lede">
+          Every Mac gets a free trial of intelligence on us, served through
+          <strong>Fireworks AI</strong>. Open Jardo and it already thinks, talks, and
+          supervises. No account to make, no API key to paste, nothing to configure.
+        </p>
+        <p class="trial__lede">
+          When your trial runs out, drop in your own Fireworks key in Settings and
+          keep going at cost. Jardo routes every request to the cheapest capable
+          model and caches aggressively, so a little goes a long way. Prefer fully
+          local and free? Point it at Ollama.
+        </p>
+        <div class="trial__stack">
+          <span class="chip">Fireworks AI</span>
+          <span class="chip">AMD Developer Cloud</span>
+          <span class="chip">Local-first STT &amp; memory</span>
+          <span class="chip">Bring your own key</span>
+        </div>
+      </div>
+    </section>
+
     <!-- ───────────────────────── download ───────────────────────── -->
     <section class="download" id="download">
       <div class="download__inner reveal">
         <img src="assets/jardo-logo.png" alt="" class="download__mark" />
         <h2>Bring one home.</h2>
         <p class="download__sub">
-          One double-click. No Docker, no database to install. The whole engine ships inside the app.
+          One double-click. No Docker, no database, no API key. The whole engine ships
+          inside the app, and your first $1 of AI is on us.
         </p>
         <div class="download__actions">
           <a class="btn btn--solid btn--lg magnetic" id="dl-mac" href="#">

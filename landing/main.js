@@ -171,3 +171,71 @@
     raf = requestAnimationFrame(frame);
   }
 })();
+
+/* Live sample: type out a Jardo supervision session when it scrolls into view. */
+(() => {
+  "use strict";
+  const body = document.getElementById("termBody");
+  if (!body) return;
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // who: you | jardo | agent ; mark: "›" | "✓" | "✗"
+  const script = [
+    ["you", "›", "hey jardo, build me a landing page with claude"],
+    ["jardo", "›", 'On it. Naming it "bakery-site", writing the brief, opening your terminal.'],
+    ["agent", "›", "claude: Bash(npm create vite@latest bakery-site)  allow?"],
+    ["jardo", "✓", "approved. safe, on-task."],
+    ["agent", "›", "claude: Write index.html, styles.css  allow?"],
+    ["jardo", "✓", "approved."],
+    ["agent", "›", "claude: Bash(rm -rf ~/Documents)  allow?"],
+    ["jardo", "✗", "declined. destructive and off-goal, told claude to keep going safely."],
+    ["you", "›", "where am i?"],
+    ["jardo", "›", "Goal: bakery landing page. 4 files written, dev server live. Nothing needs you."],
+  ];
+
+  function prefix(who, mark) {
+    const name = who === "you" ? "you" : who === "jardo" ? "jardo" : "claude-code";
+    return `${name} ${mark}`;
+  }
+
+  function render(upTo) {
+    body.innerHTML = "";
+    for (let i = 0; i < upTo; i++) {
+      const [who, mark, text] = script[i];
+      const line = document.createElement("span");
+      line.className = `term__line ${who}`;
+      const cls = mark === "✓" ? "ok" : mark === "✗" ? "no" : "who";
+      line.innerHTML = `<span class="${cls}">${prefix(who, mark)}</span>  ${text}`;
+      if (i === upTo - 1 && upTo < script.length) line.classList.add("term__cursor");
+      body.appendChild(line);
+    }
+  }
+
+  function play() {
+    if (reduce) { render(script.length); return; }
+    let n = 0;
+    const step = () => {
+      n += 1;
+      render(n);
+      if (n < script.length) {
+        setTimeout(step, 850);
+      } else {
+        // hold, then replay for a living feel
+        setTimeout(() => { n = 0; setTimeout(step, 400); }, 5000);
+      }
+    };
+    step();
+  }
+
+  let started = false;
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting && !started) { started = true; play(); }
+      });
+    }, { threshold: 0.3 });
+    io.observe(body);
+  } else {
+    play();
+  }
+})();
