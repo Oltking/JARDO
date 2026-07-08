@@ -733,15 +733,17 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       </div>
 
       <div className="dock">
-        <video
-          ref={playMuted}
-          className={`dock-avatar ${avatarState}`}
-          src="/jardo-avatar.mp4"
-          autoPlay
-          loop
-          muted
-          playsInline
-        />
+        <span className={`dock-avatar-slot ${avatarState}`}>
+          <video
+            ref={playMuted}
+            className={`dock-avatar ${avatarState}`}
+            src="/jardo-avatar.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        </span>
         <span className="live-label">
           {micPaused ? "mic paused" : phaseLabel[phase]}
         </span>
