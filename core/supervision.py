@@ -66,6 +66,48 @@ class Alignment:
     judged_by: str  # "model" | "heuristic"
 
 
+async def session_report(session: AsyncSession) -> dict:
+    """What Jardo did while supervising — the away-mode payoff. Built from the
+    append-only audit log (terminal.answered events), so the owner returns to a
+    clear account: what was approved, what was declined and redirected, and the
+    goal it was all in service of."""
+    from core.schema import AuditLog
+
+    active = await get_active(session)
+    goal = active.objective if active else ""
+    rows = (await session.execute(
+        select(AuditLog).where(AuditLog.event_type == "terminal.answered")
+        .order_by(AuditLog.ts.desc()).limit(50)
+    )).scalars().all()
+
+    approved = sum(1 for r in rows if r.detail.get("approved"))
+    declined = sum(1 for r in rows if not r.detail.get("approved"))
+    guided = sum(1 for r in rows if r.detail.get("guided"))
+    actions = [
+        {"action": (r.detail.get("action") or "")[:120],
+         "approved": bool(r.detail.get("approved")),
+         "reason": r.detail.get("reason", "")}
+        for r in rows[:8]
+    ]
+
+    if not rows:
+        spoken = ("I haven't had to answer anything yet"
+                  + (f" while working toward {goal}." if goal else "."))
+    else:
+        parts = []
+        if goal:
+            parts.append(f"Working toward {goal},")
+        parts.append(f"I approved {approved} action" + ("s" if approved != 1 else ""))
+        parts.append(f"and declined {declined}")
+        if guided:
+            parts.append(f"— on {guided} of those I told the agent how to adapt and "
+                         "keep going")
+        spoken = " ".join(parts).rstrip(",") + "."
+
+    return {"goal": goal, "approved": approved, "declined": declined,
+            "guided": guided, "actions": actions, "spoken": spoken}
+
+
 def decline_guidance(action: str, reason: str, objective: str) -> str:
     """What Jardo types to the agent after declining a command — so it adapts and
     keeps working, instead of stalling on "tell me what to do differently". This

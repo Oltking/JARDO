@@ -334,6 +334,14 @@ async fn terminal_supervise(
 }
 
 #[tauri::command]
+async fn supervision_report() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/supervision/report", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn terminal_observe() -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .post(format!("{}/terminal/observe", core_base()))
@@ -655,6 +663,7 @@ pub fn run() {
             terminal_supervise,
             terminal_tick,
             terminal_observe,
+            supervision_report,
             get_memory,
             get_approvals,
             decide_approval,

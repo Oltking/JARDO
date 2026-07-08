@@ -18,3 +18,5 @@
 {"utterance": "how do I center a div in CSS?", "expect": "chat"}
 {"utterance": "tell me a joke", "expect": "chat"}
 {"utterance": "explain what a mutex is", "expect": "chat"}
+{"utterance": "what did you do while I was away?", "expect": "report"}
+{"utterance": "give me a report on the agent", "expect": "report"}

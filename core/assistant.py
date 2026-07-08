@@ -12,7 +12,7 @@ handlers. Pure prompt + parse here; the model call and dispatch live in the app.
 import json
 import re
 
-INTENTS = ("resume", "supervise", "new_project", "stop", "chat")
+INTENTS = ("resume", "supervise", "new_project", "stop", "report", "chat")
 
 SYSTEM = """You are the intent router for Jardo, a voice assistant that supervises \
 coding agents (Claude Code, Gemini CLI) in the owner's terminal.
@@ -31,6 +31,9 @@ Include "agent" (claude, gemini, codex, or cursor) if named, else "claude".
 with an agent. Put a short description in "goal" and the agent in "agent" \
 (default "claude").
 - "stop": the user wants to stop/halt supervising or listening.
+- "report": the user wants to know what you DID while supervising / while they \
+were away (e.g. "what did you do", "what happened", "give me a report", "catch me \
+up on the agent").
 - "chat": anything else — a question, conversation, or request that is not one of \
 the above.
 
@@ -49,6 +52,7 @@ Examples:
 "just keep saying yes to the prompts" -> {"intent":"supervise","agent":"claude","clarified":"Just keep saying yes to the prompts."}
 "build me a landing page with gemini" -> {"intent":"new_project","agent":"gemini","goal":"a landing page","clarified":"Build me a landing page with Gemini."}
 "stop watching" -> {"intent":"stop","clarified":"Stop watching."}
+"what did you do while I was gone?" -> {"intent":"report","clarified":"What did you do while I was gone?"}
 "wets the wither like today" -> {"intent":"chat","clarified":"What's the weather like today?"}"""
 
 

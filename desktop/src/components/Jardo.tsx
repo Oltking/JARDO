@@ -8,6 +8,7 @@ import {
   type RoutedIntent,
   setProjectsRoot,
   startProject,
+  supervisionReport,
   terminalObserve,
   terminalSupervise,
   terminalTick,
@@ -312,6 +313,23 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
     if (action === "resume") {
       await doWhereAmI(spoken);
+      return;
+    }
+    if (action === "report") {
+      setPhase("thinking");
+      try {
+        const r = await supervisionReport();
+        const line = r.spoken || "Nothing to report yet.";
+        say("jardo", line);
+        if (spoken) {
+          setPhase("speaking");
+          await speak(line);
+        }
+      } catch {
+        setError("Couldn't pull the report.");
+      } finally {
+        setPhase("idle");
+      }
       return;
     }
     if (action === "supervise") {

@@ -125,8 +125,21 @@ export async function setProvider(
 
 // ---- Intent routing (the tool-use layer) ----------------------------------
 
+export interface SupervisionReport {
+  goal?: string;
+  approved?: number;
+  declined?: number;
+  guided?: number;
+  actions?: { action: string; approved: boolean; reason: string }[];
+  spoken?: string;
+}
+
+export async function supervisionReport(): Promise<SupervisionReport> {
+  return invoke<SupervisionReport>("supervision_report");
+}
+
 export interface RoutedIntent {
-  intent: "resume" | "supervise" | "new_project" | "stop" | "chat";
+  intent: "resume" | "supervise" | "new_project" | "stop" | "report" | "chat";
   agent?: string;
   goal?: string;
   clarified?: string; // what the model thinks the user actually meant (STT cleanup)

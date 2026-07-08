@@ -922,6 +922,13 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
             "tail": tail}
 
 
+@app.get("/supervision/report")
+async def supervision_report(session: AsyncSession = Depends(get_session)) -> dict:
+    """The away-mode payoff: what Jardo did while supervising (spec §4.4)."""
+    from core.supervision import session_report
+    return await session_report(session)
+
+
 @app.delete("/supervision")
 async def supervision_end(session: AsyncSession = Depends(get_session)) -> dict:
     from core.memory import MemoryStore
