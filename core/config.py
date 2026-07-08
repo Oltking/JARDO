@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
 
+    # Which terminal Jardo reads/answers in (spec §4.3). "terminal" (Terminal.app)
+    # and "iterm" are scriptable; Warp / VS Code aren't — for those set it to
+    # anything else and supervise Claude via the PreToolUse hook instead.
+    supervise_terminal: str = "terminal"
+
     # Voice (spec §8) — fully optional.
     voice_enabled: bool = False
     voice_tts_backend: str = "piper"  # "piper" (neural, natural) | "say" (macOS)

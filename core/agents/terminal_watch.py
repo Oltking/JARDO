@@ -19,7 +19,6 @@ press, it reports what it would have done so the owner can press it themselves.
 """
 
 import re
-import subprocess
 from dataclasses import dataclass
 
 
@@ -132,108 +131,66 @@ def _preceding_action(text: str, before: int) -> str:
     return ""
 
 
-# ---- OS surface (macOS Terminal.app) -------------------------------------
+# ---- OS surface — delegated to the configured terminal driver ------------
+# Terminal.app / iTerm2 are scriptable; the driver abstraction lives in
+# core.agents.terminals. The prompt PARSING above is terminal-agnostic.
 
-def _osa(*lines: str) -> str:
-    args = ["osascript"]
-    for ln in lines:
-        args += ["-e", ln]
-    result = subprocess.run(args, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"osascript failed: {result.stderr.strip()}")
-    return result.stdout
+from core.agents.terminals import AccessibilityDenied  # noqa: E402,F401 (re-export)
 
 
-def _target(window_id: int | None) -> str:
-    return (f"selected tab of window id {window_id}" if window_id is not None
-            else "selected tab of front window")
+def _driver():
+    from core.agents.terminals import get_driver
+    from core.config import settings
+    return get_driver(settings.supervise_terminal)
 
 
-def front_window_id() -> int | None:
-    """The id of Terminal's frontmost window, or None if there isn't one."""
-    try:
-        out = _osa('tell application "Terminal" to id of front window').strip()
-    except RuntimeError:
-        return None
-    return int(out) if out.lstrip("-").isdigit() else None
+def supervised_terminal_ok() -> bool:
+    """True if the configured terminal is one Jardo can read/answer (else it's
+    hook-only — Warp / VS Code)."""
+    return _driver() is not None
 
 
-def is_frontmost(window_id: int | None) -> bool:
-    return window_id is not None and front_window_id() == window_id
+def front_window_id():
+    d = _driver()
+    return d.front_window() if d else None
 
 
-def open_interactive(shell_command: str) -> int | None:
-    """Open a new visible Terminal window running `shell_command`, and return its
-    window id so supervision can pin to exactly this terminal. Returns immediately
-    (unlike RealTerminal.run). The command goes through a temp script so there's
-    no fragile inline AppleScript/shell escaping."""
-    import os
-    import tempfile
-    import uuid
-
-    path = os.path.join(tempfile.gettempdir(), f"jardo_launch_{uuid.uuid4().hex[:8]}.sh")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("#!/bin/bash\n" + shell_command + "\n")
-    os.chmod(path, 0o755)
-    _osa('tell application "Terminal" to activate',
-         f'tell application "Terminal" to do script "bash {path}"')
-    return front_window_id()  # the new window is now frontmost
+def is_frontmost(window_id) -> bool:
+    d = _driver()
+    return d.is_frontmost(window_id) if d else False
 
 
-def read_terminal(window_id: int | None = None) -> str:
-    """Passive read of a Terminal tab's text (types nothing, runs nothing). Pins
-    to `window_id` when given, so supervision reads exactly the terminal it's
-    watching even if the owner brings another window forward."""
-    return _osa(f'tell application "Terminal" to get contents of {_target(window_id)}')
+def open_interactive(shell_command: str):
+    d = _driver()
+    return d.open(shell_command) if d else None
+
+
+def read_terminal(window_id=None) -> str:
+    d = _driver()
+    if d is None:
+        raise RuntimeError("configured terminal isn't scriptable — use the hook")
+    return d.read(window_id)
 
 
 def read_front_terminal() -> str:
     return read_terminal(None)
 
 
-class AccessibilityDenied(RuntimeError):
-    """System Events keystroke was blocked — the owner must grant Accessibility."""
-
-
-def press_answer(prompt: PermissionPrompt, approve: bool,
-                 window_id: int | None = None) -> None:
-    """Answer the yes/no prompt in the supervised terminal.
-
-    Preferred path: deliver the keypress through Terminal's OWN Apple Events into
-    the PINNED window — the same Automation permission the read uses. This types
-    the key straight into that agent's stdin, needs no Accessibility rights, and
-    doesn't steal focus (we target the window by id, not "the front app"). Falls
-    back to a System Events keystroke only if that fails.
-    """
+def press_answer(prompt: PermissionPrompt, approve: bool, window_id=None) -> None:
+    """Answer the yes/no prompt in the supervised terminal. Numbered menus confirm
+    on the digit; (y/n) needs a return."""
+    d = _driver()
+    if d is None:
+        raise RuntimeError("configured terminal isn't scriptable — use the hook")
     key = prompt.approve_key if approve else prompt.deny_key
-    try:
-        _osa(f'tell application "Terminal" to do script "{key}" in {_target(window_id)}')
-        return
-    except RuntimeError:
-        pass  # fall through to the keystroke path
-
-    lines = ['tell application "Terminal" to activate',
-             f'tell application "System Events" to keystroke "{key}"']
-    if not prompt.numbered:
-        lines.append('tell application "System Events" to key code 36')  # Return
-    try:
-        _osa(*lines)
-    except RuntimeError as exc:
-        if "1002" in str(exc) or "not allowed to send keystrokes" in str(exc):
-            raise AccessibilityDenied(
-                "Grant Jardo Accessibility permission (System Settings → Privacy "
-                "& Security → Accessibility) so it can press the answer.") from exc
-        raise
+    d.send_keys(key, submit=not prompt.numbered, window_id=window_id)
 
 
-def type_text(text: str, window_id: int | None = None) -> None:
+def type_text(text: str, window_id=None) -> None:
     """Type a full instruction line into the agent's input and submit it (used to
-    guide the agent after a decline so it adapts and keeps working, instead of
-    stalling). Delivered through Terminal's Apple Events, so it lands in the
-    session's stdin — the agent receives it as if the owner typed it.
-
-    Backticks are stripped so nothing can be shell-interpreted, and quotes/
-    backslashes are escaped for AppleScript."""
-    clean = text.replace("`", "'").strip()
-    esc = clean.replace("\\", "\\\\").replace('"', '\\"')
-    _osa(f'tell application "Terminal" to do script "{esc}" in {_target(window_id)}')
+    guide the agent after a decline so it keeps working instead of stalling).
+    Backticks are stripped so nothing can be shell-interpreted."""
+    d = _driver()
+    if d is None:
+        raise RuntimeError("configured terminal isn't scriptable — use the hook")
+    d.send_keys(text.replace("`", "'").strip(), submit=True, window_id=window_id)

@@ -716,12 +716,18 @@ async def terminal_supervise(request: WatchStartRequest,
     owner = await MemoryStore(session).get_owner()
     if owner is None:
         raise HTTPException(status_code=409, detail="Not set up. Run: jardo setup")
-    try:
-        terminal_watch.read_front_terminal()  # probe: is a terminal readable here?
-    except Exception as exc:  # noqa: BLE001 — no terminal / not macOS
+    if not terminal_watch.supervised_terminal_ok():
         raise HTTPException(
             status_code=409,
-            detail=f"Can't read a terminal to supervise ({exc}). Open Terminal.app "
+            detail=f"Your terminal ({settings.supervise_terminal}) can't be read by "
+                   "AppleScript (Warp / VS Code). Supervise Claude via the hook "
+                   "instead — run: jardo hook install — it works in any terminal.")
+    try:
+        terminal_watch.read_front_terminal()  # probe: is a terminal readable here?
+    except Exception as exc:  # noqa: BLE001 — no terminal / not scriptable
+        raise HTTPException(
+            status_code=409,
+            detail=f"Can't read your terminal ({exc}). Open {settings.supervise_terminal} "
                    "with your agent running, then ask me again.",
         ) from exc
 
