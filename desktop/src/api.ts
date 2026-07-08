@@ -288,7 +288,13 @@ export async function terminalTick(): Promise<TickResult> {
 
 export interface Observation {
   watching?: boolean;
-  state?: "progressing" | "stuck" | "off_task" | "done" | "idle" | "waiting" | "unknown";
+  state?:
+    | "progressing" | "stuck" | "off_task" | "done" | "idle" | "waiting"
+    | "error" | "unknown";
+  activity?: string;      // what the agent is doing right now
+  last_command?: string;  // the most recent command/tool it ran
+  issue?: string;         // any error / blocker seen
+  progress?: string;      // a concrete progress signal
   note?: string;
   notable?: boolean;
 }

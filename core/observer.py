@@ -1,34 +1,47 @@
 """Supervision comprehension — Jardo's eyes on the agent (spec §4.3).
 
 Beyond answering permission prompts, Jardo watches the agent's terminal OUTPUT
-and judges whether it's making progress, stuck in a loop, drifting off the goal,
-or done — so it can flag "Claude's been stuck on the same error" instead of just
-clicking Yes. Pure prompt + parse here; the model call lives in the app.
+and reads EVERYTHING it can: what the agent is doing right now, the exact command
+it ran, any error or blocker, concrete progress signals, and an overall state
+(progressing / stuck / off-task / done / error). This is what turns Jardo from a
+permission button into a real overseer — and it feeds the supervision view.
+
+Pure prompt + parse here; the model call lives in the app.
 """
 
 import json
 import re
 
-STATES = ("progressing", "stuck", "off_task", "done", "idle", "waiting")
+STATES = ("progressing", "stuck", "off_task", "done", "idle", "waiting", "error")
 
 # States worth interrupting the owner about (vs. quiet, expected progress).
-NOTABLE = frozenset({"stuck", "off_task", "done"})
+NOTABLE = frozenset({"stuck", "off_task", "done", "error"})
 
-SYSTEM = """You are supervising a coding agent working toward the owner's goal.
-Given the goal and the agent's recent terminal output, judge its state. Reply
-with ONLY a JSON object, nothing else.
+# The structured fields the model reports — everything it can see.
+_FIELDS = ("state", "activity", "last_command", "issue", "progress", "note")
 
-States:
-- progressing: making forward progress toward the goal.
-- stuck: repeating the same error, looping, or blocked and not advancing.
-- off_task: doing something clearly unrelated to the goal.
-- done: the task appears complete (success message, tests passing, finished).
-- idle: nothing meaningful happening / waiting for input.
+SYSTEM = """You are supervising a coding agent (Claude Code / Gemini CLI) working
+toward the owner's goal. Given the goal and the agent's recent terminal output,
+report a precise read of EVERYTHING you can see. Reply with ONLY a JSON object,
+nothing else.
 
-Base your judgment ONLY on the output shown; do not invent. Keep "note" to one
-short sentence addressed to the owner.
+Fields (use "" when a field isn't visible — never invent):
+- state: progressing | stuck | off_task | done | idle | waiting | error
+    progressing = advancing toward the goal; stuck = looping/blocked/repeating an
+    error; off_task = doing something unrelated; done = task complete (success,
+    tests passing); error = a clear failure just occurred; waiting = paused for
+    input; idle = nothing meaningful happening.
+- activity: a short phrase for what the agent is doing RIGHT NOW (e.g. "running
+    the test suite", "editing src/app.py", "installing dependencies").
+- last_command: the most recent command or tool call shown, verbatim if short
+    (e.g. "pytest -q", "npm run build"), else summarized.
+- issue: the actual error / failure / blocker text if any (short), else "".
+- progress: a concrete progress signal if any ("12 tests passed", "build
+    succeeded", "3 files changed", "server started"), else "".
+- note: ONE sentence to the owner — only meaningful when the state is notable.
 
-Schema: {"state": "progressing"|"stuck"|"off_task"|"done"|"idle", "note": string}"""
+Schema: {"state": ..., "activity": "", "last_command": "", "issue": "",
+"progress": "", "note": ""}"""
 
 
 def build_messages(goal: str, output: str) -> list[dict]:
@@ -40,18 +53,22 @@ def build_messages(goal: str, output: str) -> list[dict]:
 
 
 def parse_observation(raw: str) -> dict:
+    empty = {f: "" for f in _FIELDS}
+    empty.update({"state": "idle", "notable": False})
     if not raw:
-        return {"state": "idle", "note": ""}
+        return empty
     match = re.search(r"\{.*\}", raw, re.S)
     if not match:
-        return {"state": "idle", "note": ""}
+        return empty
     try:
         obj = json.loads(match.group(0))
     except (ValueError, TypeError):
-        return {"state": "idle", "note": ""}
+        return empty
+    out = {}
     state = obj.get("state")
-    if state not in STATES:
-        state = "idle"
-    note = obj.get("note", "")
-    note = note.strip()[:200] if isinstance(note, str) else ""
-    return {"state": state, "note": note, "notable": state in NOTABLE}
+    out["state"] = state if state in STATES else "idle"
+    for field in ("activity", "last_command", "issue", "progress", "note"):
+        val = obj.get(field, "")
+        out[field] = val.strip()[:300] if isinstance(val, str) else ""
+    out["notable"] = out["state"] in NOTABLE
+    return out

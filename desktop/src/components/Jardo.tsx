@@ -551,10 +551,12 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           const label =
             state === "stuck" ? "⚠ Looks stuck" :
             state === "off_task" ? "⚠ Drifting off-task" :
+            state === "error" ? "✗ Hit an error" :
             state === "done" ? "✓ Looks done" : state;
-          const line = o.note ? `${label} — ${o.note}` : label;
-          say("event", line, state === "done");
-          await speak(o.note || label);
+          // Prefer the concrete detail — the actual error, or a progress signal.
+          const detail = o.issue || o.note || o.progress || o.activity || "";
+          say("event", detail ? `${label} — ${detail}` : label, state === "done");
+          await speak(o.note || o.issue || label);
         } else if (state && state !== "unknown") {
           lastStateRef.current = state;
         }
