@@ -164,8 +164,7 @@ async def _dispatch(decision: RouteDecision, messages: list[dict]):
             detail="No cloud provider is configured. Add a Fireworks or AMD key in "
                    "Settings → Providers. Local tip: install Ollama for key-free chat.",
         )
-    client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
-                             timeout=settings.request_timeout_seconds)
+    client = providers.make_client(chosen, timeout=settings.request_timeout_seconds)
     # Cap the reply length to keep paid output tokens down (spec §5). The persona
     # already asks for brevity; this is the hard ceiling.
     return await client.chat(providers.resolve_model(chosen, decision.model), messages,
@@ -908,8 +907,7 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
     chosen = providers.configured()[0]
     model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
     try:
-        client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
-                                 timeout=30)
+        client = providers.make_client(chosen, timeout=30)
         result = await client.chat(providers.resolve_model(chosen, model),
                                    build_messages(active.objective, tail),
                                    max_tokens=400, temperature=0.0, reasoning_effort="low")
@@ -980,8 +978,7 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
         if providers.configured():
             chosen = providers.configured()[0]
             model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
-            client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
-                                     timeout=30)
+            client = providers.make_client(chosen, timeout=30)
             r = await client.chat(providers.resolve_model(chosen, model), msgs,
                                   max_tokens=400, temperature=0.0, reasoning_effort="low")
             return r.content
@@ -1167,8 +1164,7 @@ async def assistant_route(body: RouteRequest,
     messages = build_messages(msg)
 
     async def _miss() -> tuple[str, int]:
-        client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
-                                 timeout=30)
+        client = providers.make_client(chosen, timeout=30)
         r = await client.chat(resolved, messages, max_tokens=400, temperature=0.0,
                               reasoning_effort="low")
         return r.content, (r.prompt_tokens or 0) + (r.completion_tokens or 0)

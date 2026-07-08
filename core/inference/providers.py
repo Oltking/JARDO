@@ -12,6 +12,8 @@ secret, so it lives in a 0600 JSON file the desktop Settings panel can write
 """
 
 import json
+import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +21,7 @@ from core import secrets
 from core.config import settings
 
 _OVERRIDES_PATH = Path.home() / ".jardo" / "providers.json"
+_DEVICE_ID_PATH = Path.home() / ".jardo" / "device_id"
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,10 @@ def set_base_url(name: str, url: str) -> None:
 
 
 def base_url(name: str) -> str:
+    if is_hosted(name):
+        # The proxy exposes the OpenAI-compatible path under /api, so the client's
+        # "{base}/chat/completions" resolves to "{proxy}/api/chat/completions".
+        return hosted_url().rstrip("/") + "/api"
     override = _overrides().get(name, {}).get("base_url")
     if override:
         return override
@@ -66,8 +73,51 @@ def has_key(name: str) -> bool:
     return bool(secrets.read_secret(PROVIDERS[name].secret_service))
 
 
+# ---- Hosted proxy (the Jardo free trial) ----------------------------------
+# When the owner hasn't pasted their own Fireworks key, Jardo can route Fireworks
+# calls through our hosted proxy, which holds the real key and meters a small
+# per-device trial. So a fresh install talks out of the box — no key, no Ollama.
+
+def hosted_url() -> str:
+    return (_overrides().get("fireworks", {}).get("proxy") or settings.proxy_url).strip()
+
+
+def is_hosted(name: str) -> bool:
+    """Fireworks via our proxy: only when the owner has NO key of their own but a
+    proxy URL is configured. Their own key always takes precedence (their spend)."""
+    return name == "fireworks" and not has_key("fireworks") and bool(hosted_url())
+
+
+def device_id() -> str:
+    """Stable anonymous per-install id, for trial metering at the proxy."""
+    try:
+        return _DEVICE_ID_PATH.read_text().strip()
+    except OSError:
+        did = uuid.uuid4().hex
+        _DEVICE_ID_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _DEVICE_ID_PATH.write_text(did)
+        try:
+            os.chmod(_DEVICE_ID_PATH, 0o600)
+        except OSError:
+            pass
+        return did
+
+
+def request_headers(name: str) -> dict:
+    """Extra headers for the client. Hosted mode identifies the device (metering)
+    and optionally passes the shared app secret."""
+    if not is_hosted(name):
+        return {}
+    headers = {"x-jardo-device": device_id()}
+    if settings.app_secret:
+        headers["x-jardo-app"] = settings.app_secret
+    return headers
+
+
 def is_ready(name: str) -> bool:
-    """A provider is usable only when it has both a key and an endpoint."""
+    """Usable when it has a key + endpoint, or (Fireworks) via the hosted proxy."""
+    if is_hosted(name):
+        return True
     return has_key(name) and bool(base_url(name))
 
 
@@ -77,7 +127,23 @@ def configured() -> list[str]:
 
 
 def api_key(name: str) -> str | None:
+    if is_hosted(name):
+        return "hosted"  # the proxy holds the real key; this is just a placeholder
     return secrets.read_secret(PROVIDERS[name].secret_service)
+
+
+def make_client(name: str, timeout: float | None = None):
+    """Build a ready-to-use OpenAI-compatible client for a provider, wired for
+    hosted mode (proxy base + device header) when the owner has no key. One place
+    so every Fireworks/AMD call site behaves the same."""
+    from core.inference.fireworks import FireworksClient
+
+    return FireworksClient(
+        api_key(name) or "",
+        base_url(name),
+        timeout=timeout if timeout is not None else settings.request_timeout_seconds,
+        extra_headers=request_headers(name),
+    )
 
 
 def resolve_model(name: str, model: str) -> str:

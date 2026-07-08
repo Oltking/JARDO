@@ -28,10 +28,13 @@ class ChatResult:
 
 
 class FireworksClient:
-    def __init__(self, api_key: str, base_url: str, timeout: float = 120.0):
+    def __init__(self, api_key: str, base_url: str, timeout: float = 120.0,
+                 extra_headers: dict | None = None):
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        # Hosted-proxy mode adds a device header for trial metering (providers.py).
+        self._extra_headers = extra_headers or {}
 
     async def chat(
         self,
@@ -55,7 +58,7 @@ class FireworksClient:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.post(
                 f"{self._base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self._api_key}"},
+                headers={"Authorization": f"Bearer {self._api_key}", **self._extra_headers},
                 json=payload,
             )
         if response.status_code != 200:

@@ -17,6 +17,11 @@ def main() -> None:
     # config validator picks the SQLite path under ~/.jardo.
     os.environ.setdefault("JARDO_EMBEDDED", "1")
 
+    # Ship with the hosted free-trial proxy on by default, so the app talks with no
+    # key and no Ollama out of the box. Override JARDO_PROXY_URL at run/build time
+    # to point at your own deployment; set it empty to disable hosted mode.
+    os.environ.setdefault("JARDO_PROXY_URL", "https://jardo.vercel.app")
+
     # When frozen, bundled model files (piper voice, whisper) live next to the
     # binary; expose that root so the app can resolve them.
     if getattr(sys, "frozen", False):

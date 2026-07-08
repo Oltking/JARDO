@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # Source: docs/vendor/fireworks/quickstart-serverless.md
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
 
+    # Hosted inference proxy (the Jardo free trial). When set and the owner hasn't
+    # pasted their own key, Jardo routes Fireworks calls through this proxy, which
+    # holds the real key server-side and meters a small per-device trial. The URL
+    # is public (not a secret); set per deployment with JARDO_PROXY_URL. Empty here
+    # (dev/tests behave exactly as before); the shipped frozen build defaults it on
+    # (see packaging/jardo_core_main.py).
+    proxy_url: str = ""
+    # Optional shared secret the proxy may require (soft gate); set JARDO_APP_SECRET
+    # to the same value in Vercel. Not real security (ships in the app), just a bar.
+    app_secret: str = ""
+
     # AMD (self-hosted vLLM on MI300X) — also OpenAI-compatible, so it reuses the
     # same client; only base_url + key differ. Empty until the owner points Jardo
     # at their droplet (Settings → Providers, or JARDO_AMD_BASE_URL). The endpoint
