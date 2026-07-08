@@ -57,11 +57,13 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
     # positively recognize as safe. Everything else is declined (never run) — the
     # owner can run it themselves.
     if conservative:
+        from core import appsettings
         from core.sentinel.checks import is_recognizably_safe
-        if not is_recognizably_safe(command):
+        learned = frozenset(appsettings.get("allowed_programs", []) or [])
+        if not is_recognizably_safe(command, learned):
             return Decision(False, "not a recognizably-safe command — declined for "
-                            "safety while acting unattended; run it yourself if you "
-                            "intend to", "low")
+                            "safety while acting unattended; run it yourself, or add "
+                            "it with 'jardo allow'", "low")
 
     # 2. Purpose — must serve the owner's objective (if one is set).
     if objective and objective.strip():

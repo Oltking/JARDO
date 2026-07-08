@@ -56,12 +56,14 @@ tsc bundle rake ruby gem php composer swift xcodebuild
 """.split())
 
 
-def is_recognizably_safe(command: str) -> bool:
+def is_recognizably_safe(command: str, extra_allowed: frozenset = frozenset()) -> bool:
     """True only if every && / || / | / ; segment starts with a recognized safe
-    program. Used to keep unattended auto-approval conservative: unknown commands
-    are declined, never run (audit #1)."""
+    program. Keeps unattended auto-approval conservative: unknown commands are
+    declined, never run (audit #1). `extra_allowed` is the owner's personal
+    learned allowlist (programs they've said to always allow)."""
     if not command or not command.strip():
         return False
+    allowed = _SAFE_PROGRAMS | extra_allowed
     for segment in re.split(r"&&|\|\||\||;|\n", command):
         toks = segment.strip().split()
         # Skip leading VAR=value assignments.
@@ -71,7 +73,7 @@ def is_recognizably_safe(command: str) -> bool:
         if i >= len(toks):
             continue  # empty segment (e.g. trailing operator)
         program = toks[i].rsplit("/", 1)[-1]  # basename of ./bin/tool
-        if program not in _SAFE_PROGRAMS:
+        if program not in allowed:
             return False
     return True
 

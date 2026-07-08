@@ -137,6 +137,31 @@ def facts() -> None:
         console.print(f"• [{row['kind']}/{row['source']}] {row['content']}")
 
 
+@app.command()
+def allow(program: str = typer.Argument(
+        "", help="Program/command to always allow (blank to list)")) -> None:
+    """Your personal always-allow list — commands the supervisor may auto-approve
+    even though they're not in the built-in safe set."""
+    from core import appsettings
+
+    allowed = appsettings.get("allowed_programs", []) or []
+    if not program.strip():
+        if allowed:
+            for p in allowed:
+                console.print(f"• {p}")
+        else:
+            console.print("No custom allowed commands. Add one: jardo allow <program>")
+        return
+    prog = program.strip().rsplit("/", 1)[-1]
+    if prog in allowed:
+        console.print(f"'{prog}' is already on your allow list.")
+        return
+    allowed.append(prog)
+    appsettings.set("allowed_programs", allowed)
+    console.print(f"[green]Added '{prog}' — the supervisor will now auto-approve it "
+                  "when safe and on-task.[/green]")
+
+
 @app.command(name="eval-behavior")
 def eval_behavior() -> None:
     """Score Jardo's safety decisions (always) and intent routing (needs a key)."""
