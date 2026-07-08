@@ -959,12 +959,18 @@ class RouteRequest(BaseModel):
 
 
 @app.post("/assistant/route")
-async def assistant_route(body: RouteRequest) -> dict:
+async def assistant_route(body: RouteRequest,
+                          session: AsyncSession = Depends(get_session)) -> dict:
     """The tool-use layer: let the model decide what the owner wants (understanding,
     not keyword regex). Only trusted when a capable cloud model is configured —
     otherwise we return fallback:true so the desktop uses its offline heuristics,
-    which are more reliable than the tiny local model for this."""
+    which are more reliable than the tiny local model for this.
+
+    Routing is stateless (utterance -> intent), so it goes through the response
+    cache: repeated commands ("where am I", "supervise claude", "stop") cost zero
+    tokens on a hit — always cheaper than an uncached call (spec §5)."""
     from core.assistant import build_messages, parse_intent
+    from core.cache import cached_call
 
     msg = body.message.strip()
     if not msg:
@@ -973,18 +979,24 @@ async def assistant_route(body: RouteRequest) -> dict:
         return {"intent": "chat", "fallback": True}  # no capable model → use regex
 
     chosen = providers.configured()[0]
-    tiers = RouterConfig.load().tiers
-    model = tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")  # routing is cheap
-    try:
+    model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+    resolved = providers.resolve_model(chosen, model)
+    messages = build_messages(msg)
+
+    async def _miss() -> tuple[str, int]:
         client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                                  timeout=30)
-        # Enough headroom for reasoning models (gpt-oss puts thinking in
-        # reasoning_content first, then the JSON) — 80 was too low and they got
-        # cut off before emitting content.
-        result = await client.chat(providers.resolve_model(chosen, model),
-                                    build_messages(msg), max_tokens=400, temperature=0.0,
-                                    reasoning_effort="low")
-        return parse_intent(result.content)
+        r = await client.chat(resolved, messages, max_tokens=400, temperature=0.0,
+                              reasoning_effort="low")
+        return r.content, (r.prompt_tokens or 0) + (r.completion_tokens or 0)
+
+    try:
+        # Exact cache only — semantic could conflate near-but-different intents
+        # ("supervise claude" vs "stop supervising").
+        cached = await cached_call(session, resolved, messages, _miss,
+                                   allow_semantic=False)
+        await session.commit()
+        return parse_intent(cached.content)
     except Exception:  # noqa: BLE001 — router failed → let the desktop fall back
         return {"intent": "chat", "fallback": True}
 
