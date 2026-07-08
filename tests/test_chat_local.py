@@ -25,7 +25,13 @@ async def local_model_ready():
         pytest.skip(f"local model {model} not installed")
 
 
-async def test_chat_end_to_end_via_local_model(session, local_model_ready):
+async def test_chat_end_to_end_via_local_model(session, local_model_ready, monkeypatch):
+    # This test asserts the local (no-key) routing path. On a dev machine that
+    # has a real Fireworks key in the Keychain, the premium front-door would
+    # correctly upgrade to cloud — so force "no cloud configured" to test local.
+    from core.inference import providers
+    monkeypatch.setattr(providers, "configured", lambda: [])
+
     owner = Owner(name="Integration Test", pronoun_style="sir",
                   email="itest@example.test",
                   device_public_key="-----BEGIN PUBLIC KEY-----\nx\n-----END PUBLIC KEY-----")
