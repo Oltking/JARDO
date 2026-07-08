@@ -1428,3 +1428,14 @@ code {
   font-family: var(--mono); background: var(--bg); border: 1px solid var(--line);
   padding: 1px 5px; border-radius: 4px;
 }
+
+/* ---- Friendly first-run hint (not an error) ---- */
+.banner.hint {
+  display: flex; align-items: center; gap: 12px;
+  background: color-mix(in srgb, var(--ok) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--ok) 22%, var(--line));
+  color: var(--text); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin: 8px 16px; font-size: 13px;
+}
+.banner.hint .link-btn { margin-left: auto; white-space: nowrap; }
+.banner.hint code, .banner.hint strong { color: var(--ok); }

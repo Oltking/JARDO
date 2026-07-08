@@ -66,6 +66,28 @@ pnpm install
 pnpm tauri dev
 ```
 
+### Installing the app build (heads-up: it's unsigned)
+
+Jardo isn't code-signed with an Apple Developer certificate yet, so the **first
+time you open it, macOS will block it** with *"Jardo can't be opened because
+Apple cannot check it for malicious software."* That's expected — it's not a
+virus, just unsigned. To open it:
+
+1. **Right-click** (or Control-click) the Jardo app → **Open** → **Open** again to confirm. *(Only needed once.)*
+2. If that doesn't offer an Open button: **System Settings → Privacy & Security**, scroll to *"Jardo was blocked…"* → **Open Anyway**.
+3. Power-user alternative: `xattr -dr com.apple.quarantine /Applications/Jardo.app`
+
+You'll also be asked to grant **Automation** (to read your terminal) and, on
+first supervise, possibly **Accessibility** — both are needed for Jardo to
+answer the agent's prompts. Grant them in System Settings → Privacy & Security.
+
+### First run — where to go
+
+1. On launch, Jardo greets you and asks for the day's goal.
+2. **Add your model key:** open the **⋯** menu → **Providers** → paste a Fireworks (or AMD) key. *This is what makes Jardo sharp — without it, it falls back to a tiny local model.*
+3. **Set your name & projects folder** in the same menu, so it knows what to call you and where your projects live.
+4. Then just talk to it (below).
+
 Then just **talk to it**:
 
 | Say… | Jardo… |

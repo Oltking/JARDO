@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   chooseProject,
   getIdentity,
+  getProviders,
   routeIntent,
   sendChat,
   type RoutedIntent,
@@ -161,6 +162,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [needsAccess, setNeedsAccess] = useState(false);
   const [micPaused, setMicPaused] = useState(false); // pause the always-on mic
+  const [noKey, setNoKey] = useState(false); // first-run: no model key configured
 
   const runningRef = useRef(false);
   const convRef = useRef<string | null>(null);
@@ -211,6 +213,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       .then((id) => {
         nameRef.current = id.name;
       })
+      .catch(() => undefined);
+    getProviders()
+      .then((info) => setNoKey(info.active.length === 0))
       .catch(() => undefined);
     return () => {
       runningRef.current = false;
@@ -668,6 +673,17 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       {needsSetup && (
         <div className="banner warn" role="alert">
           Jardo isn't set up yet. Run <code>jardo setup</code>, then talk to me.
+        </div>
+      )}
+      {noKey && !needsSetup && (
+        <div className="banner hint">
+          <span>
+            👋 To make me sharp, open <strong>⋯ → Providers</strong> and paste a
+            Fireworks key. Until then I'm on a small local model.
+          </span>
+          <button className="link-btn" onClick={() => setNoKey(false)}>
+            got it
+          </button>
         </div>
       )}
       {needsAccess && (
