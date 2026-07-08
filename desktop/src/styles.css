@@ -1336,3 +1336,24 @@ code {
   background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
   padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ---- Jardo living avatar ---- */
+.welcome-avatar {
+  width: 128px; height: 128px; border-radius: 50%; object-fit: cover;
+  margin-bottom: 14px; background: var(--elev);
+  box-shadow: 0 0 0 1px var(--line);
+  transition: box-shadow 0.3s ease;
+}
+.welcome-avatar.listening { box-shadow: 0 0 0 2px var(--ok), 0 0 30px -6px var(--ok); }
+.welcome-avatar.thinking { box-shadow: 0 0 0 2px var(--warn), 0 0 30px -6px var(--warn); }
+.welcome-avatar.speaking { box-shadow: 0 0 0 2px #7aa2f7, 0 0 30px -6px #7aa2f7; }
+
+.dock-avatar {
+  width: 34px; height: 34px; border-radius: 50%; object-fit: cover; flex: none;
+  background: var(--elev); box-shadow: 0 0 0 1px var(--line);
+  transition: box-shadow 0.25s ease; opacity: 0.9;
+}
+.dock-avatar.idle { opacity: 0.55; }
+.dock-avatar.listening { box-shadow: 0 0 0 2px var(--ok), 0 0 14px -4px var(--ok); }
+.dock-avatar.thinking { box-shadow: 0 0 0 2px var(--warn); }
+.dock-avatar.speaking { box-shadow: 0 0 0 2px #7aa2f7, 0 0 14px -4px #7aa2f7; }

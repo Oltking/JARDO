@@ -165,6 +165,19 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
   const nameRef = useRef<string | null>(null);
+  const avatarRef = useRef<HTMLVideoElement>(null);
+
+  // The avatar loops while Jardo is active (listening / thinking / speaking) and
+  // rests when idle — so it feels alive exactly when it's doing something.
+  useEffect(() => {
+    const v = avatarRef.current;
+    if (!v) return;
+    if (phase === "idle") {
+      v.pause();
+    } else {
+      v.play().catch(() => undefined);
+    }
+  }, [phase]);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
@@ -562,7 +575,14 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       <div className="stream" ref={scrollRef}>
         {lines.length === 0 && (
           <div className="empty welcome">
-            <img className="welcome-logo" src="/jardo-logo.png" alt="Jardo" />
+            <video
+              className={`welcome-avatar ${phase}`}
+              src="/jardo-avatar.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
             <p className="welcome-title">Jardo</p>
             <p className="welcome-sub">
               I'm listening. Say “where am I?” to pick up where you left off, or
@@ -585,6 +605,14 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       </div>
 
       <div className="dock">
+        <video
+          ref={avatarRef}
+          className={`dock-avatar ${phase}`}
+          src="/jardo-avatar.mp4"
+          loop
+          muted
+          playsInline
+        />
         <span className={`live-dot ${phase}`} />
         <span className="live-label">{phaseLabel[phase]}</span>
         <textarea
