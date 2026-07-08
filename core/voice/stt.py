@@ -13,6 +13,17 @@ hallucinating "nonsense" on quiet/short clips.
 
 DEFAULT_MODEL = "small.en"
 
+# Priming vocabulary (faster-whisper `initial_prompt`): biases recognition toward
+# the words Jardo actually cares about, so accented/non-native English lands on
+# the right term ("super vice" -> "supervise") instead of a phonetic guess. This
+# is the cheapest, biggest win for non-native speakers — it runs locally.
+_VOCAB_PROMPT = (
+    "Jardo, supervise, Claude, Gemini, Codex, Cursor, terminal, commit, push, "
+    "pull request, branch, pytest, npm, pnpm, build, deploy, resume, project, "
+    "repository, permission, approve, decline, yes, no, stop, where am I, "
+    "what am I working on, keep going, start a new project."
+)
+
 
 class SpeechToText:
     def __init__(self, model_size: str = DEFAULT_MODEL, compute_type: str = "int8",
@@ -47,6 +58,7 @@ class SpeechToText:
         segments, _info = model.transcribe(
             audio, beam_size=5, language=self._language,
             condition_on_previous_text=False,  # reduce hallucination
+            initial_prompt=_VOCAB_PROMPT,       # bias toward Jardo's vocabulary
             # Silero VAD: skip non-speech so silence isn't transcribed as garbage.
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 400},

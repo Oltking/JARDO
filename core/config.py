@@ -53,7 +53,12 @@ class Settings(BaseSettings):
     voice_piper_model: str = str(
         Path.home() / ".local/share/jardo/piper/en_US-hfc_female-medium.onnx"
     )
-    voice_stt_model: str = "small.en"  # faster-whisper model (accuracy vs. speed)
+    # faster-whisper model. "small.en" is English-only (fast, tuned for native
+    # English). For accented / non-native speakers, a MULTILINGUAL model handles
+    # accents much better — set JARDO_VOICE_STT_MODEL=medium (or large-v3 for the
+    # best accuracy, at CPU-speed cost). The vocabulary prompt in stt.py helps on
+    # any model.
+    voice_stt_model: str = "small.en"
     # Optional noise suppression before STT (noisereduce). Off by default and
     # measured, not assumed — Whisper can do worse on over-denoised audio.
     # Needs the `denoise` extra: uv sync --extra denoise
