@@ -188,6 +188,16 @@ def where_am_i(state: ProjectState) -> dict:
         parts.append(f"Goal: {state.goal}.")
     if last_focus:
         parts.append(f"Last thing worked on: {last_focus[:200]}.")
+    elif state.recent_commits:
+        # No agent memory / no stated goal — answer from git history so questions
+        # like "what are we working on?" still get something real, not just the
+        # branch name.
+        def _short(commit: str) -> str:
+            msg = commit.split(" ", 1)[-1]
+            msg = msg.split(":", 1)[0] if ":" in msg[:48] else msg  # drop the detail tail
+            return msg[:60].rstrip(" .,-—")
+        recent = "; ".join(_short(c) for c in state.recent_commits[:2])
+        parts.append(f"Recent work: {recent}.")
     if current_bits:
         parts.append("Right now you're " + ", ".join(current_bits) + ".")
     if attention:
