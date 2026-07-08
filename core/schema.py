@@ -11,8 +11,7 @@ UPDATE/DELETE (SECURITY.md rule 5).
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.db import Base
@@ -29,7 +28,7 @@ def _now() -> datetime:
 class Owner(Base):
     __tablename__ = "owners"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     name: Mapped[str] = mapped_column(String(120))
     pronoun_style: Mapped[str] = mapped_column(String(8))  # "sir" | "ma" (spec §1)
     email: Mapped[str] = mapped_column(String(254), unique=True)
@@ -40,7 +39,7 @@ class Owner(Base):
 class Memory(Base):
     __tablename__ = "memories"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
     kind: Mapped[str] = mapped_column(String(16), index=True)  # "fact" | "preference"
     content: Mapped[str] = mapped_column(Text)
@@ -54,7 +53,7 @@ class Memory(Base):
 class Conversation(Base):
     __tablename__ = "conversations"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
     title: Mapped[str] = mapped_column(String(200), default="(untitled)")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
@@ -65,7 +64,7 @@ class Conversation(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     conversation_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("conversations.id"), index=True
     )
@@ -85,7 +84,7 @@ class Policy(Base):
 
     __tablename__ = "policies"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     action_type: Mapped[str] = mapped_column(String(64), index=True)
     target_pattern: Mapped[str] = mapped_column(String(500))  # regex, fullmatch
     tier: Mapped[str] = mapped_column(String(16))  # always-allow | ask-once | always-ask
@@ -97,7 +96,7 @@ class Approval(Base):
 
     __tablename__ = "approvals"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     actor: Mapped[str] = mapped_column(String(64))
     action_type: Mapped[str] = mapped_column(String(64))
     target: Mapped[str] = mapped_column(Text)
@@ -134,7 +133,7 @@ class SupervisionSession(Base):
 
     __tablename__ = "supervision_sessions"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
     objective: Mapped[str] = mapped_column(Text)     # what the owner wants achieved
     agent: Mapped[str] = mapped_column(String(64), default="any")  # scope, e.g. claude-code
@@ -153,7 +152,7 @@ class Project(Base):
 
     __tablename__ = "projects"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
     path: Mapped[str] = mapped_column(Text)              # absolute folder path
@@ -204,7 +203,7 @@ class Task(Base):
 
     __tablename__ = "tasks"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("owners.id"), index=True)
     kind: Mapped[str] = mapped_column(String(24))       # chat | action | goal
     goal: Mapped[str] = mapped_column(Text)
@@ -228,7 +227,7 @@ class Report(Base):
 
     __tablename__ = "reports"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(), primary_key=True, default=_uuid)
     period: Mapped[str] = mapped_column(String(8), index=True)  # hourly | daily | weekly
     window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))

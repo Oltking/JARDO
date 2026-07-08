@@ -5,17 +5,55 @@ macOS Keychain via core.secrets (SECURITY.md rule 3). Everything below is safe
 to appear in a process listing.
 """
 
+import os
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _env_keys() -> set[str]:
+    return set(os.environ)
+
+
+def jardo_home() -> Path:
+    """Per-user data directory for the self-contained build (SQLite file, etc.)."""
+    return Path.home() / ".jardo"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="JARDO_")
 
+    # Self-contained desktop build: no Postgres/Redis. When true (the packaged
+    # app sets JARDO_EMBEDDED=1), the datastore defaults to a SQLite file under
+    # ~/.jardo and jobs run in-process. Dev/server default is false → Postgres.
+    embedded: bool = False
+
     # Local dev defaults match infra/docker-compose.yml (localhost-bound).
     database_url: str = "postgresql+asyncpg://jardo:jardo-dev-only@127.0.0.1:5432/jardo"
     redis_url: str = "redis://127.0.0.1:6379/0"
+
+    @model_validator(mode="after")
+    def _embedded_datastore(self) -> "Settings":
+        # In embedded mode, point at a per-user SQLite file unless the owner set
+        # JARDO_DATABASE_URL explicitly (env always wins over this default).
+        if self.embedded and "JARDO_DATABASE_URL" not in _env_keys():
+            home = jardo_home()
+            home.mkdir(parents=True, exist_ok=True)
+            self.database_url = f"sqlite+aiosqlite:///{home / 'jardo.db'}"
+        return self
+
+    @model_validator(mode="after")
+    def _bundled_models(self) -> "Settings":
+        # Frozen desktop build: use the voice model shipped inside the app so the
+        # first run is offline and instant (no download). JARDO_BUNDLE_DIR is set
+        # by the frozen entry point to the bundle's data root.
+        bundle = os.environ.get("JARDO_BUNDLE_DIR")
+        if bundle and "JARDO_VOICE_PIPER_MODEL" not in _env_keys():
+            piper = Path(bundle) / "models" / "piper" / "en_US-hfc_female-medium.onnx"
+            if piper.exists():
+                self.voice_piper_model = str(piper)
+        return self
 
     # Fireworks OpenAI-compatible endpoint.
     # Source: docs/vendor/fireworks/quickstart-serverless.md

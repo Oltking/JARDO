@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.db import is_sqlite
 from core.embeddings import embed, to_pgvector
 from core.schema import ResponseCache
 
@@ -88,7 +89,9 @@ async def put_cached(session: AsyncSession, model: str, messages: list[dict],
         return  # another request cached it first — fine, nothing to do
     # Only store the query embedding for semantic-eligible (single-shot) calls, so
     # context-dependent multi-turn entries can never be semantically cross-matched.
-    if store_embedding:
+    # pgvector is Postgres-only; on SQLite (embedded build) the column doesn't
+    # exist and we simply skip semantic caching (exact-match still works).
+    if store_embedding and not is_sqlite():
         vec = await embed(_query_text(messages))
         if vec:
             await session.execute(
@@ -104,6 +107,8 @@ async def semantic_get(session: AsyncSession, model: str,
 
     Only entries stored with an embedding (single-shot calls) are candidates, so
     this is safe to use for stateless calls only (alignment, classification)."""
+    if is_sqlite():
+        return None  # no pgvector on the embedded build — exact-match only
     query = _query_text(messages)
     if not query:
         return None

@@ -40,3 +40,10 @@ postgres-data/
 docs/
 evals/scores.json
 .run/
+
+# Frozen core staged into the Tauri bundle (built by scripts/build-core-binary.sh)
+desktop/src-tauri/resources/jardo-core/*
+!desktop/src-tauri/resources/jardo-core/PLACEHOLDER
+
+# PyInstaller work dir (frozen core is built, never committed)
+build/
