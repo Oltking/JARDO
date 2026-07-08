@@ -1,0 +1,20 @@
+{"utterance": "where was I?", "expect": "resume"}
+{"utterance": "catch me up on what I'm working on", "expect": "resume"}
+{"utterance": "what am I working on right now", "expect": "resume"}
+{"utterance": "where did I leave off yesterday", "expect": "resume"}
+{"utterance": "supervise claude in my terminal", "expect": "supervise"}
+{"utterance": "keep clicking yes for me", "expect": "supervise"}
+{"utterance": "watch what claude is doing", "expect": "supervise"}
+{"utterance": "just handle the prompts", "expect": "supervise"}
+{"utterance": "super vice my terminal", "expect": "supervise"}
+{"utterance": "take over answering the agent", "expect": "supervise"}
+{"utterance": "build me a todo app with claude", "expect": "new_project"}
+{"utterance": "create a new website", "expect": "new_project"}
+{"utterance": "spin up a rust cli tool", "expect": "new_project"}
+{"utterance": "let's start a new project with gemini", "expect": "new_project"}
+{"utterance": "stop watching", "expect": "stop"}
+{"utterance": "that's enough, stand down", "expect": "stop"}
+{"utterance": "what's the capital of France?", "expect": "chat"}
+{"utterance": "how do I center a div in CSS?", "expect": "chat"}
+{"utterance": "tell me a joke", "expect": "chat"}
+{"utterance": "explain what a mutex is", "expect": "chat"}

@@ -60,9 +60,14 @@ class FireworksClient:
             )
         data = response.json()
         try:
-            content = data["choices"][0]["message"]["content"]
+            message = data["choices"][0]["message"]
         except (KeyError, IndexError) as exc:
             raise FireworksError(f"unexpected response shape: {data}") from exc
+        # Reasoning models (e.g. gpt-oss) put thinking in `reasoning_content` and
+        # the answer in `content`; if the reply was cut off (finish_reason=length)
+        # `content` can be missing. Never crash on that — fall back to the
+        # reasoning text, then empty, and let the caller handle it.
+        content = message.get("content") or message.get("reasoning_content") or ""
         usage = data.get("usage") or {}
         return ChatResult(
             content=content,

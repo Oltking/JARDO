@@ -924,8 +924,11 @@ async def assistant_route(body: RouteRequest) -> dict:
     try:
         client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                                  timeout=30)
+        # Enough headroom for reasoning models (gpt-oss puts thinking in
+        # reasoning_content first, then the JSON) — 80 was too low and they got
+        # cut off before emitting content.
         result = await client.chat(providers.resolve_model(chosen, model),
-                                    build_messages(msg), max_tokens=80, temperature=0.0)
+                                    build_messages(msg), max_tokens=400, temperature=0.0)
         return parse_intent(result.content)
     except Exception:  # noqa: BLE001 — router failed → let the desktop fall back
         return {"intent": "chat", "fallback": True}

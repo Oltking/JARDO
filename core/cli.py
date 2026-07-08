@@ -137,6 +137,49 @@ def facts() -> None:
         console.print(f"• [{row['kind']}/{row['source']}] {row['content']}")
 
 
+@app.command(name="eval-behavior")
+def eval_behavior() -> None:
+    """Score Jardo's safety decisions (always) and intent routing (needs a key)."""
+    from core.behavior_evals import run_intent_eval, run_safety_eval
+
+    async def _route(utterance: str) -> dict:
+        from core.assistant import build_messages, parse_intent
+        from core.inference import providers
+        from core.inference.fireworks import FireworksClient
+        from core.router.router import RouterConfig
+
+        if not providers.configured():
+            return {"intent": "chat"}
+        chosen = providers.configured()[0]
+        model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+        client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
+                                 timeout=30)
+        r = await client.chat(providers.resolve_model(chosen, model),
+                              build_messages(utterance), max_tokens=400, temperature=0.0)
+        return parse_intent(r.content)
+
+    async def _run() -> None:
+        safety = run_safety_eval()
+        color = "green" if safety["score"] == 1.0 else "red"
+        console.print(f"[bold]safety[/bold]  [{color}]{safety['passed']}/{safety['n']} "
+                      f"({safety['score'] * 100:.0f}%)[/{color}]")
+        for m in safety["misses"]:
+            console.print(f"  [red]MISS[/red] expected {m['expected']}, got {m['got']}: "
+                          f"{m['command']}")
+        intents = await run_intent_eval(_route)
+        if intents["n"]:
+            color = "green" if intents["score"] >= 0.9 else "yellow"
+            console.print(f"[bold]intents[/bold] [{color}]{intents['passed']}/{intents['n']} "
+                          f"({intents['score'] * 100:.0f}%)[/{color}]")
+            for m in intents["misses"]:
+                console.print(f"  [yellow]MISS[/yellow] expected {m['expected']}, got "
+                              f"{m['got']}: {m['utterance']}")
+        else:
+            console.print("[dim]intents: skipped (no capable model configured)[/dim]")
+
+    asyncio.run(_run())
+
+
 @app.command()
 def forget(
     fact_id: str = typer.Argument("", help="Fact id to forget (see: jardo facts)"),
