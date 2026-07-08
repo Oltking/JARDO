@@ -710,6 +710,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
               loop
               muted
               playsInline
+              preload="auto"
+              onCanPlay={(e) => {
+                e.currentTarget.muted = true;
+                void e.currentTarget.play().catch(() => undefined);
+              }}
             />
             <p className="welcome-title">Jardo</p>
             <p className="welcome-sub">
@@ -742,6 +747,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
             loop
             muted
             playsInline
+            preload="auto"
+            onCanPlay={(e) => {
+              e.currentTarget.muted = true;
+              void e.currentTarget.play().catch(() => undefined);
+            }}
           />
         </span>
         <span className="live-label">

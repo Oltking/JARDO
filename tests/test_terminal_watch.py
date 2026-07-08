@@ -106,6 +106,27 @@ CLAUDE_TRUST = """\
 """
 
 
+CLAUDE_TRUST_V2 = """\
+ Accessing workspace:
+ /Users/dev/projects/thing
+
+ Quick safety check: Is this a project you created or one you trust?
+
+ Claude Code'll be able to read, edit, and execute files here.
+
+ ❯ 1. Yes, I trust this folder
+   2. No, exit
+"""
+
+
+def test_detects_new_trust_prompt_wording():
+    # Claude changed the wording — no "Do you trust…" question line anymore.
+    p = detect_permission_prompt(CLAUDE_TRUST_V2)
+    assert p is not None and p.kind == "trust"
+    assert p.approve_key == "1"  # Yes, I trust this folder
+    assert p.deny_key == "2"     # No, exit
+
+
 def test_detects_folder_trust_prompt():
     # Claude's FIRST prompt in a new folder — onboarding stalls if this is missed.
     p = detect_permission_prompt(CLAUDE_TRUST)

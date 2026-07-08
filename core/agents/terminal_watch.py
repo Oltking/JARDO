@@ -53,7 +53,15 @@ _QUESTION = re.compile(
     r"allow this[^\n?]*\?|apply (?:this )?(?:edit|change)[^\n?]*\?)",
     re.IGNORECASE,
 )
-_TRUST = re.compile(r"do you trust|trust the files|trust this folder", re.IGNORECASE)
+# Folder-trust prompt on first launch. Claude's wording varies ("Do you trust
+# the files…", "Is this a project you created or one you trust?", "Accessing
+# workspace… Quick safety check"), so match on any of these markers, not one
+# exact question.
+_TRUST = re.compile(
+    r"do you trust|trust the files|trust this folder|one you trust|"
+    r"is this a project you|quick safety check|accessing workspace",
+    re.IGNORECASE,
+)
 # A numbered option line: "❯ 1. Yes", "  2. Yes, and don't ask again", "3. No…".
 _OPTION = re.compile(r"^\s*[❯>*]?\s*(\d+)[.)]\s+(.*\S)\s*$", re.MULTILINE)
 _YN = re.compile(r"\(\s*y\s*/\s*n\s*\)\s*[:?]?\s*$", re.IGNORECASE)
@@ -72,6 +80,20 @@ def detect_permission_prompt(text: str) -> PermissionPrompt | None:
     # Claude draws its dialog inside a box ("│ ❯ 1. Yes │"), so strip the border
     # decorations first or the option lines won't match.
     tail = "\n".join(_strip_borders(ln) for ln in text.splitlines()[-18:])
+
+    # Folder-trust prompt FIRST, detected by its markers + Yes/No options rather
+    # than an exact question line (Claude's trust wording keeps changing). Its
+    # deny option is "No, exit" — we approve trusting the owner's own project.
+    if _TRUST.search(tail):
+        options = _OPTION.findall(tail)
+        if options:
+            approve = _match_option(options, ("yes", "trust"), prefer_narrowest=True)
+            deny = _match_option(options, ("no", "exit", "cancel"),
+                                 prefer_narrowest=False)
+            if approve and deny:
+                return PermissionPrompt("folder trust", "trust this folder",
+                                        approve_key=approve, deny_key=deny,
+                                        numbered=True, kind="trust")
 
     q = _QUESTION.search(tail)
     if q:
