@@ -8,12 +8,21 @@ def _owner(pronoun="ma", name="Ada"):
 
 
 def test_honorific_follows_owner_record():
-    assert "'ma'" in build_system_prompt(_owner("ma"), [])
-    assert "'sir'" in build_system_prompt(_owner("sir"), [])
+    assert "ma'am" in build_system_prompt(_owner("ma"), [])
+    assert '"sir"' in build_system_prompt(_owner("sir"), [])
 
 
 def test_unknown_pronoun_defaults_to_sir():
-    assert "'sir'" in build_system_prompt(_owner("other"), [])
+    assert '"sir"' in build_system_prompt(_owner("other"), [])
+
+
+def test_knows_its_capabilities_and_stays_tight():
+    # The persona must claim its real powers (so it never denies them) and be
+    # told to keep replies brief.
+    prompt = build_system_prompt(_owner(), [])
+    assert "Supervise coding agents" in prompt
+    assert "never deny" in prompt.lower() or "never reply that you" in prompt.lower()
+    assert "brief" in prompt.lower()
 
 
 def test_facts_injected():
