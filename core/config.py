@@ -37,6 +37,10 @@ class Settings(BaseSettings):
 
     request_timeout_seconds: float = 120.0
     history_window: int = 20  # messages of context sent per chat turn
+    # Hard ceiling on chat reply length — the main lever on paid output tokens
+    # (spec §5). ~400 tokens is a few concise sentences; raise it if you want
+    # longer answers, at higher cost.
+    chat_max_tokens: int = 400
 
     # Phase 1 binds to loopback only; remote access arrives with mTLS in Phase 5.
     api_host: str = "127.0.0.1"

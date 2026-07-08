@@ -135,7 +135,10 @@ async def _dispatch(decision: RouteDecision, messages: list[dict]):
         )
     client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
                              timeout=settings.request_timeout_seconds)
-    return await client.chat(providers.resolve_model(chosen, decision.model), messages)
+    # Cap the reply length to keep paid output tokens down (spec §5). The persona
+    # already asks for brevity; this is the hard ceiling.
+    return await client.chat(providers.resolve_model(chosen, decision.model), messages,
+                             max_tokens=settings.chat_max_tokens)
 
 
 class ChatRequest(BaseModel):
