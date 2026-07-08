@@ -323,9 +323,30 @@ export async function voiceTranscribe(seconds: number): Promise<TranscribeResult
   }
 }
 
+// Strip markdown so TTS reads clean prose instead of "asterisk asterisk".
+// Models reply with **bold**, `code`, bullets, headers, links — none of which
+// should be pronounced. Applied at this single point so every caller is covered.
+export function forSpeech(md: string): string {
+  return md
+    .replace(/```[\s\S]*?```/g, " code block. ") // fenced code
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → text
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // headers
+    .replace(/^\s*[-*+]\s+/gm, "") // bullet markers
+    .replace(/^\s*\d+\.\s+/gm, "") // numbered list markers
+    .replace(/^\s*>\s?/gm, "") // blockquotes
+    .replace(/[*_~]{1,3}/g, "") // bold / italic / strikethrough
+    .replace(/\|/g, " ") // table pipes
+    .replace(/\n{2,}/g, ". ") // paragraph break → pause
+    .replace(/\n/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export async function voiceSay(text: string): Promise<void> {
   try {
-    await invoke("voice_say", { text });
+    await invoke("voice_say", { text: forSpeech(text) });
   } catch (e) {
     throw toApiError(e);
   }
