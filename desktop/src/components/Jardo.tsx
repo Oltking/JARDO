@@ -236,9 +236,39 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
   // ---- one place every utterance flows through, voice or typed --------------
   async function handle(text: string, spoken: boolean) {
-    const msg = text.trim();
-    if (!msg) return;
-    say("you", msg);
+    const raw = text.trim();
+    if (!raw) return;
+
+    // Understand FIRST: have the model figure out what the owner MEANT (cleaning
+    // up speech-to-text noise) and classify intent in one pass. `clarified` then
+    // drives everything below — display, confirmation, and the chat model — so
+    // Jardo acts on your meaning, not the raw transcript. Falls back to the raw
+    // text + offline heuristics when there's no capable model (no-key path).
+    let action: RoutedIntent["intent"] = "chat";
+    let agent = "claude";
+    let msg = raw;
+    let goal = raw;
+    try {
+      const routed = await routeIntent(raw);
+      if (routed.fallback) throw new Error("fallback");
+      if (routed.clarified) msg = routed.clarified;
+      action = routed.intent;
+      if (routed.agent) agent = routed.agent;
+      goal = routed.goal || msg;
+    } catch {
+      if (wantsWhereAmI(raw)) action = "resume";
+      else if (!superRef.current && parseNewProject(raw)) {
+        const p = parseNewProject(raw)!;
+        action = "new_project";
+        agent = p.agent;
+        goal = p.goal;
+      } else if (parseSupervise(raw)) {
+        action = "supervise";
+        agent = parseSupervise(raw)!.agent;
+      }
+    }
+
+    say("you", msg); // show what Jardo understood, not the raw jargon
 
     // A side-effectful action (creating a project + launching an agent) is
     // waiting on a yes/no — resolve that before anything else (audit #1).
@@ -258,7 +288,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       // Neither yes nor no — drop the pending action and handle this as new input.
     }
 
-    if (superRef.current && wantsStop(msg)) {
+    if (superRef.current && (action === "stop" || wantsStop(msg))) {
       stopSupervising();
       const line = "Okay — I've stopped watching your terminal.";
       say("jardo", line);
@@ -273,31 +303,6 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         say("jardo", quick);
         if (spoken) await speak(quick);
         return;
-      }
-    }
-
-    // Understand intent with the model (the tool-use layer). If there's no
-    // capable model, or the router is unreachable, fall back to offline
-    // heuristics — which is also the no-key path, so behaviour never regresses.
-    let action: RoutedIntent["intent"] = "chat";
-    let agent = "claude";
-    let goal = msg;
-    try {
-      const routed = await routeIntent(msg);
-      if (routed.fallback) throw new Error("fallback");
-      action = routed.intent;
-      if (routed.agent) agent = routed.agent;
-      if (routed.goal) goal = routed.goal;
-    } catch {
-      if (wantsWhereAmI(msg)) action = "resume";
-      else if (!superRef.current && parseNewProject(msg)) {
-        const p = parseNewProject(msg)!;
-        action = "new_project";
-        agent = p.agent;
-        goal = p.goal;
-      } else if (parseSupervise(msg)) {
-        action = "supervise";
-        agent = parseSupervise(msg)!.agent;
       }
     }
 
@@ -320,13 +325,6 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       // Don't scaffold + spawn an agent off one utterance — confirm first.
       pendingRef.current = { goal, agent };
       const line = `Start a new ${agent === "gemini" ? "Gemini" : "Claude"} project for that and set it up in your terminal? Say yes to go ahead.`;
-      say("jardo", line);
-      if (spoken) await speak(line);
-      return;
-    }
-    if (action === "stop" && superRef.current) {
-      stopSupervising();
-      const line = "Okay — I've stopped watching your terminal.";
       say("jardo", line);
       if (spoken) await speak(line);
       return;

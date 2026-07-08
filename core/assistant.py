@@ -34,18 +34,22 @@ with an agent. Put a short description in "goal" and the agent in "agent" \
 - "chat": anything else — a question, conversation, or request that is not one of \
 the above.
 
+The message may be a rough speech-to-text transcript with recognition errors and \
+homophones. Also return "clarified": the sentence the speaker most likely MEANT, \
+with obvious transcription errors fixed and punctuation added. If it's already \
+clear, return it unchanged. Never invent content that wasn't said.
+
 Schema: {"intent": "resume"|"supervise"|"new_project"|"stop"|"chat", "agent": \
-string (optional), "goal": string (optional)}
+string (optional), "goal": string (optional), "clarified": string}
 
 Examples:
-"where was I?" -> {"intent":"resume"}
-"catch me up on what I'm working on" -> {"intent":"resume"}
-"keep an eye on claude for me" -> {"intent":"supervise","agent":"claude"}
-"just keep saying yes to the prompts" -> {"intent":"supervise","agent":"claude"}
-"build me a landing page with gemini" -> {"intent":"new_project","agent":"gemini","goal":"a landing page"}
-"let's create a new todo app" -> {"intent":"new_project","agent":"claude","goal":"a todo app"}
-"stop watching" -> {"intent":"stop"}
-"what's the capital of France?" -> {"intent":"chat"}"""
+"where was I?" -> {"intent":"resume","clarified":"Where was I?"}
+"catch me up on what I'm working on" -> {"intent":"resume","clarified":"Catch me up on what I'm working on."}
+"super vice claude for me" -> {"intent":"supervise","agent":"claude","clarified":"Supervise Claude for me."}
+"just keep saying yes to the prompts" -> {"intent":"supervise","agent":"claude","clarified":"Just keep saying yes to the prompts."}
+"build me a landing page with gemini" -> {"intent":"new_project","agent":"gemini","goal":"a landing page","clarified":"Build me a landing page with Gemini."}
+"stop watching" -> {"intent":"stop","clarified":"Stop watching."}
+"wets the wither like today" -> {"intent":"chat","clarified":"What's the weather like today?"}"""
 
 
 def build_messages(message: str) -> list[dict]:
@@ -75,4 +79,7 @@ def parse_intent(raw: str) -> dict:
     goal = obj.get("goal")
     if isinstance(goal, str) and goal.strip():
         out["goal"] = goal.strip()
+    clarified = obj.get("clarified")
+    if isinstance(clarified, str) and clarified.strip():
+        out["clarified"] = clarified.strip()
     return out

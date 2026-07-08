@@ -129,6 +129,7 @@ export interface RoutedIntent {
   intent: "resume" | "supervise" | "new_project" | "stop" | "chat";
   agent?: string;
   goal?: string;
+  clarified?: string; // what the model thinks the user actually meant (STT cleanup)
   fallback?: boolean; // true → no capable model; caller should use its heuristics
 }
 
