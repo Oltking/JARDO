@@ -264,6 +264,14 @@ async fn get_projects() -> Result<serde_json::Value, ApiError> {
 }
 
 #[tauri::command]
+async fn get_savings() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/stats/savings", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn get_terminal_choice() -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .get(format!("{}/settings/terminal", core_base()))
@@ -676,6 +684,7 @@ pub fn run() {
             set_projects_root,
             get_terminal_choice,
             set_terminal_choice,
+            get_savings,
             choose_project,
             start_project,
             where_am_i,

@@ -5,6 +5,7 @@ import { Jardo } from "./components/Jardo";
 import { Approvals } from "./components/Approvals";
 import { Agents } from "./components/Agents";
 import { Reports } from "./components/Reports";
+import { Savings } from "./components/Savings";
 import { Settings } from "./components/Settings";
 import { Splash } from "./components/Splash";
 import { Briefing } from "./components/Briefing";
@@ -12,10 +13,11 @@ import { killSwitch } from "./api";
 
 // Secondary surfaces live behind a single "More" drawer so the main screen stays
 // what Jardo is for: talking and supervising. Nothing here is needed day-to-day.
-type Panel = "providers" | "approvals" | "reports" | "activity";
+type Panel = "providers" | "savings" | "approvals" | "reports" | "activity";
 
 const PANELS: { id: Panel; label: string }[] = [
   { id: "providers", label: "Providers" },
+  { id: "savings", label: "Savings" },
   { id: "approvals", label: "Approvals" },
   { id: "activity", label: "Agent activity" },
   { id: "reports", label: "Reports" },
@@ -110,6 +112,7 @@ export default function App() {
             </nav>
             <div className="drawer-body">
               {panel === "providers" && <Settings />}
+              {panel === "savings" && <Savings />}
               {panel === "approvals" && <Approvals />}
               {panel === "activity" && <Agents />}
               {panel === "reports" && <Reports />}

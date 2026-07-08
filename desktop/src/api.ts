@@ -252,6 +252,20 @@ export async function getProjectsRoot(): Promise<{ root: string | null }> {
   return invoke<{ root: string | null }>("get_projects_root");
 }
 
+export interface Savings {
+  spent_usd: number;
+  saved_usd: number;
+  local_requests: number;
+  cloud_requests: number;
+  local_pct: number;
+  cache_hits: number;
+  tokens_saved: number;
+}
+
+export async function getSavings(): Promise<Savings> {
+  return invoke<Savings>("get_savings");
+}
+
 export interface TerminalChoice {
   terminal: string;
   supported: string[];

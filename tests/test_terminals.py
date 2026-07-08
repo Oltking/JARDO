@@ -20,12 +20,15 @@ def test_unknown_or_empty_defaults_to_terminal_app():
     assert isinstance(get_driver(""), TerminalApp)
 
 
-def test_supervised_terminal_ok_follows_config(monkeypatch):
+def test_supervised_terminal_ok_follows_setting(monkeypatch):
+    # The runtime override (appsettings, written by the Settings UI) is the source
+    # of truth for which terminal Jardo drives.
+    from core import appsettings
     from core.agents import terminal_watch
-    from core.config import settings
-    monkeypatch.setattr(settings, "supervise_terminal", "warp")
-    assert terminal_watch.supervised_terminal_ok() is False
-    monkeypatch.setattr(settings, "supervise_terminal", "iterm")
+    choice = {"supervise_terminal": "warp"}
+    monkeypatch.setattr(appsettings, "get", lambda k, d=None: choice.get(k, d))
+    assert terminal_watch.supervised_terminal_ok() is False  # Warp → hook-only
+    choice["supervise_terminal"] = "iterm"
     assert terminal_watch.supervised_terminal_ok() is True
 
 

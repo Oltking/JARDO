@@ -159,6 +159,13 @@ class ChatResponse(BaseModel):
     completion_tokens: int | None
 
 
+@app.get("/stats/savings")
+async def savings_stats(session: AsyncSession = Depends(get_session)) -> dict:
+    """The value-prop, made visible: spend, savings, local %, cache hits (§5)."""
+    from core.router.spend import savings_summary
+    return await savings_summary(session)
+
+
 @app.get("/cache/stats")
 async def cache_statistics(session: AsyncSession = Depends(get_session)) -> dict:
     """Cost-optimization cache stats: entries, hits, and tokens saved (§5)."""
