@@ -1003,6 +1003,8 @@ async def assistant_route(body: RouteRequest,
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session)) -> ChatResponse:
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Empty message.")
     store = MemoryStore(session)
     owner = await store.get_owner()
     if owner is None:

@@ -240,12 +240,50 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   async function handle(text: string, spoken: boolean) {
     const raw = text.trim();
     if (!raw) return;
+    say("you", raw); // immediate echo — stays responsive
 
-    // Understand FIRST: have the model figure out what the owner MEANT (cleaning
-    // up speech-to-text noise) and classify intent in one pass. `clarified` then
-    // drives everything below — display, confirmation, and the chat model — so
-    // Jardo acts on your meaning, not the raw transcript. Falls back to the raw
-    // text + offline heuristics when there's no capable model (no-key path).
+    // --- Instant, offline handling first: the most common turns (confirmations,
+    // stop, identity) need no model round-trip, so they answer immediately. Only
+    // substantive requests pay for the understanding call further down.
+
+    // A side-effectful action (create project + launch agent) awaits a yes/no.
+    if (pendingRef.current) {
+      const p = pendingRef.current;
+      pendingRef.current = null;
+      if (isAffirmative(raw)) {
+        await startNewProject(p, spoken);
+        return;
+      }
+      if (isNegative(raw)) {
+        const line = "Okay, cancelled.";
+        say("jardo", line);
+        if (spoken) await speak(line);
+        return;
+      }
+      // Neither yes nor no — fall through and treat as new input.
+    }
+
+    if (superRef.current && wantsStop(raw)) {
+      stopSupervising();
+      const line = "Okay — I've stopped watching your terminal.";
+      say("jardo", line);
+      if (spoken) await speak(line);
+      return;
+    }
+
+    // Jardo answers its own identity/capability questions — never the model.
+    if (!superRef.current) {
+      const quick = quickAnswer(raw, nameRef.current);
+      if (quick) {
+        say("jardo", quick);
+        if (spoken) await speak(quick);
+        return;
+      }
+    }
+
+    // --- Substantive request: NOW understand it — clean up STT noise + classify
+    // intent in one cached call. `msg` becomes the clarified text used for chat.
+    // Falls back to offline heuristics when there's no capable model (no-key path).
     let action: RoutedIntent["intent"] = "chat";
     let agent = "claude";
     let msg = raw;
@@ -270,44 +308,6 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       }
     }
 
-    say("you", msg); // show what Jardo understood, not the raw jargon
-
-    // A side-effectful action (creating a project + launching an agent) is
-    // waiting on a yes/no — resolve that before anything else (audit #1).
-    if (pendingRef.current) {
-      const p = pendingRef.current;
-      pendingRef.current = null;
-      if (isAffirmative(msg)) {
-        await startNewProject(p, spoken);
-        return;
-      }
-      if (isNegative(msg)) {
-        const line = "Okay, cancelled.";
-        say("jardo", line);
-        if (spoken) await speak(line);
-        return;
-      }
-      // Neither yes nor no — drop the pending action and handle this as new input.
-    }
-
-    if (superRef.current && (action === "stop" || wantsStop(msg))) {
-      stopSupervising();
-      const line = "Okay — I've stopped watching your terminal.";
-      say("jardo", line);
-      if (spoken) await speak(line);
-      return;
-    }
-
-    // Jardo answers its own identity/capability questions — never the model.
-    if (!superRef.current) {
-      const quick = quickAnswer(msg, nameRef.current);
-      if (quick) {
-        say("jardo", quick);
-        if (spoken) await speak(quick);
-        return;
-      }
-    }
-
     if (action === "resume") {
       await doWhereAmI(spoken);
       return;
@@ -327,6 +327,14 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       // Don't scaffold + spawn an agent off one utterance — confirm first.
       pendingRef.current = { goal, agent };
       const line = `Start a new ${agent === "gemini" ? "Gemini" : "Claude"} project for that and set it up in your terminal? Say yes to go ahead.`;
+      say("jardo", line);
+      if (spoken) await speak(line);
+      return;
+    }
+    if (action === "stop" && superRef.current) {
+      // Router caught a "stop" the offline check missed (e.g. accented phrasing).
+      stopSupervising();
+      const line = "Okay — I've stopped watching your terminal.";
       say("jardo", line);
       if (spoken) await speak(line);
       return;
