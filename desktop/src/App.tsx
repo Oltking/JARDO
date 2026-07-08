@@ -9,7 +9,8 @@ import { Savings } from "./components/Savings";
 import { Settings } from "./components/Settings";
 import { Splash } from "./components/Splash";
 import { Briefing } from "./components/Briefing";
-import { killSwitch } from "./api";
+import { Onboarding } from "./components/Onboarding";
+import { getIdentity, killSwitch } from "./api";
 
 // Secondary surfaces live behind a single "More" drawer so the main screen stays
 // what Jardo is for: talking and supervising. Nothing here is needed day-to-day.
@@ -30,8 +31,17 @@ export default function App() {
   const [briefingDone, setBriefingDone] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [panel, setPanel] = useState<Panel>("providers");
+  // null = still checking; false = brand-new user (no owner); true = onboarded.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   const onBriefingDone = useCallback(() => setBriefingDone(true), []);
+
+  // First-run gate: if there's no owner yet, show onboarding before anything else.
+  useEffect(() => {
+    getIdentity()
+      .then((id) => setOnboarded(Boolean(id.name)))
+      .catch(() => setOnboarded(true)); // core not ready / error → don't block; Splash covers it
+  }, []);
 
   useEffect(() => {
     const unlisten = listen<{ source: string }>("kill-switch", () => {
@@ -59,7 +69,8 @@ export default function App() {
   return (
     <div className="app">
       <Splash />
-      {!briefingDone && <Briefing onDone={onBriefingDone} />}
+      {onboarded === false && <Onboarding onDone={() => setOnboarded(true)} />}
+      {onboarded === true && !briefingDone && <Briefing onDone={onBriefingDone} />}
 
       <header className="topbar">
         <div className="brand">
