@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   chooseProject,
@@ -165,19 +165,17 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
   const nameRef = useRef<string | null>(null);
-  const avatarRef = useRef<HTMLVideoElement>(null);
 
-  // The avatar loops while Jardo is active (listening / thinking / speaking) and
-  // rests when idle — so it feels alive exactly when it's doing something.
-  useEffect(() => {
-    const v = avatarRef.current;
-    if (!v) return;
-    if (phase === "idle") {
-      v.pause();
-    } else {
-      v.play().catch(() => undefined);
-    }
-  }, [phase]);
+  // Ref callback that guarantees the avatar autoplays and loops. WebKit blocks
+  // autoplay unless the `muted` *property* is set (React's `muted` attribute is
+  // unreliable), and a paused video shows a play-button overlay — so we mute and
+  // play imperatively and never pause it. The glow (via className) shows state.
+  const playMuted = useCallback((el: HTMLVideoElement | null) => {
+    if (!el) return;
+    el.muted = true;
+    el.loop = true;
+    void el.play().catch(() => undefined);
+  }, []);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
@@ -576,6 +574,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         {lines.length === 0 && (
           <div className="empty welcome">
             <video
+              ref={playMuted}
               className={`welcome-avatar ${phase}`}
               src="/jardo-avatar.mp4"
               autoPlay
@@ -606,9 +605,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
       <div className="dock">
         <video
-          ref={avatarRef}
+          ref={playMuted}
           className={`dock-avatar ${phase}`}
           src="/jardo-avatar.mp4"
+          autoPlay
           loop
           muted
           playsInline
