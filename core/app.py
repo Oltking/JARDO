@@ -109,7 +109,7 @@ def _premium_frontdoor(decision: RouteDecision, cloud_ready: bool,
         pass
     return RouteDecision(
         "fireworks", model, decision.task_label, est_cost_usd=est,
-        alternative_cost_usd=est, saved_usd=0.0, floor="premium-frontdoor",
+        alternative_cost_usd=est, saved_usd=0.0, floor="premium",  # ≤16 chars (routing_log)
         reason="front-door upgraded to premium (cloud key set)")
 
 

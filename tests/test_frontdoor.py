@@ -18,7 +18,8 @@ def test_local_is_upgraded_when_a_key_exists():
     out = _premium_frontdoor(_local(), cloud_ready=True)
     assert out.backend == "fireworks"
     assert out.model != "qwen2.5:0.5b"
-    assert out.floor == "premium-frontdoor"
+    assert out.floor == "premium"
+    assert len(out.floor) <= 16  # must fit routing_log.floor varchar(16)
 
 
 def test_local_stays_local_without_a_key():
