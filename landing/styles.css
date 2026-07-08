@@ -323,3 +323,76 @@ section { position: relative; }
   font-size: 0.82rem; color: var(--ink-dim); padding: 8px 16px; border-radius: 100px;
   border: 1px solid var(--line); background: rgba(255,255,255,0.02);
 }
+
+/* ─────────────── live app scene (demo) ─────────────── */
+.demo__stage { position: relative; }
+.scene {
+  position: relative; height: clamp(380px, 42vw, 460px); width: 100%;
+  perspective: 1400px;
+}
+.win {
+  position: absolute; border-radius: 12px; overflow: hidden;
+  background: #050506; border: 1px solid var(--line);
+  box-shadow: 0 40px 90px -30px rgba(0,0,0,0.9);
+}
+.win__bar {
+  display: flex; align-items: center; gap: 7px; padding: 10px 13px;
+  border-bottom: 1px solid var(--line-soft); background: #0b0b0d;
+}
+.win__bar span { width: 10px; height: 10px; border-radius: 50%; background: #26262c; }
+.win__bar em {
+  margin-left: auto; font-style: normal; font-size: 0.7rem;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint);
+}
+.win__body { padding: 16px; }
+
+/* terminal window: behind, upper-right, animates open */
+.win--term {
+  top: 0; right: 0; width: 74%; height: 82%;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  opacity: 0; transform: translate(24px, -14px) scale(0.96) rotateY(-6deg);
+  transform-origin: top right;
+  transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+}
+.win--term.is-open { opacity: 1; transform: none; }
+.win--term .win__body { height: calc(100% - 40px); overflow: hidden; font-size: 0.82rem; line-height: 1.85; }
+
+/* Jardo app window: front, lower-left */
+.win--app {
+  bottom: 0; left: 0; width: 60%; z-index: 2;
+  box-shadow: 0 40px 90px -24px rgba(0,0,0,0.95);
+}
+.app__body { display: flex; flex-direction: column; align-items: center; padding: 22px 18px 20px; }
+.app__avatar { width: 96px; height: 96px; }
+.app__state {
+  margin-top: 10px; font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); min-height: 1em; transition: color 0.3s;
+}
+.app__state.approve { color: #8fd6ad; }
+.app__state.decline { color: #e6a2a2; }
+.app__chat { width: 100%; margin-top: 16px; display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
+.cbub {
+  max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 0.82rem; line-height: 1.45;
+  opacity: 0; transform: translateY(6px); animation: cbub-in 0.4s var(--ease) forwards;
+}
+.cbub.out { animation: cbub-out 0.5s var(--ease) forwards; }
+.cbub.you { align-self: flex-end; background: var(--white); color: #000; border-bottom-right-radius: 4px; }
+.cbub.jardo { align-self: flex-start; background: rgba(255,255,255,0.06); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+@keyframes cbub-in { to { opacity: 1; transform: none; } }
+@keyframes cbub-out { to { opacity: 0; transform: translateY(-6px); } }
+
+/* terminal lines + verdict chips */
+.term__line { display: block; white-space: pre-wrap; opacity: 0; transform: translateY(3px); animation: term-in 0.3s var(--ease) forwards; color: var(--ink-dim); }
+@keyframes term-in { to { opacity: 1; transform: none; } }
+.term__line .muted { color: var(--faint); }
+.term__line .prompt { color: #fff; }
+.term__verdict { display: inline-block; margin-left: 4px; padding: 1px 8px; border-radius: 100px; font-size: 0.72rem; border: 1px solid var(--line); }
+.term__verdict.ok { color: #8fd6ad; border-color: rgba(143,214,173,0.4); }
+.term__verdict.no { color: #e6a2a2; border-color: rgba(230,162,162,0.4); }
+
+@media (max-width: 900px) {
+  .scene { height: auto; display: flex; flex-direction: column; gap: 14px; perspective: none; }
+  .win { position: relative; width: 100% !important; }
+  .win--term { height: 240px; transform: none; opacity: 1; }
+  .win--app { order: -1; }
+}

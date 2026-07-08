@@ -150,12 +150,21 @@
         </ul>
       </div>
       <div class="demo__stage reveal">
-        <div class="term" id="term" aria-label="Sample Jardo session">
-          <div class="term__bar">
-            <span></span><span></span><span></span>
-            <em>jardo</em>
+        <div class="scene" id="scene" aria-label="Jardo supervising a coding agent">
+          <!-- The terminal Jardo opens and watches -->
+          <div class="win win--term" id="sceneTerm">
+            <div class="win__bar"><span></span><span></span><span></span><em>claude · zsh</em></div>
+            <div class="win__body" id="sceneTermBody"></div>
           </div>
-          <div class="term__body" id="termBody"></div>
+          <!-- The Jardo app: avatar + live chat -->
+          <div class="win win--app">
+            <div class="win__bar"><span></span><span></span><span></span><em>Jardo</em></div>
+            <div class="win__body app__body">
+              <canvas class="app__avatar" id="sceneAvatar" width="128" height="128"></canvas>
+              <div class="app__state" id="sceneState">listening</div>
+              <div class="app__chat" id="sceneChat"></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

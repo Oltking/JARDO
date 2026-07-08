@@ -113,7 +113,7 @@
       // How bright the ambient drifting-light field is allowed to get. The
       // pointer halo is kept separate and at full strength, so lowering this
       // dims the background dots without touching the mouse-follow glow.
-      const AMBIENT = 0.6;
+      const AMBIENT = 0.3;
       for (let j = 0; j < rows; j++) {
         for (let i = 0; i < cols; i++) {
           const x = i * gap, y = j * gap;
@@ -134,7 +134,7 @@
           if (v < 0.04) continue;
           const rad = v * dotMax;
           // brightness: dim the ambient white, keep the pointer's punch intact
-          const alpha = Math.min(1, 0.03 + a * 0.9 * AMBIENT + pHalo * 0.9);
+          const alpha = Math.min(1, 0.04 + a * 0.9 * AMBIENT + pHalo * 0.9);
           ctx.beginPath();
           ctx.arc(x, y, rad, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255,255,255,${alpha})`;
@@ -172,70 +172,136 @@
   }
 })();
 
-/* Live sample: type out a Jardo supervision session when it scrolls into view. */
+/* Live app scene: Jardo listens, speaks, opens a terminal, and supervises Claude
+   in it, with the avatar reacting and chat bubbles fading in/out. Loops in view. */
 (() => {
   "use strict";
-  const body = document.getElementById("termBody");
-  if (!body) return;
+  const scene = document.getElementById("scene");
+  const avatarEl = document.getElementById("sceneAvatar");
+  const stateEl = document.getElementById("sceneState");
+  const chatEl = document.getElementById("sceneChat");
+  const termWin = document.getElementById("sceneTerm");
+  const termBody = document.getElementById("sceneTermBody");
+  if (!scene || !avatarEl || !chatEl || !termBody) return;
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // who: you | jardo | agent ; mark: "›" | "✓" | "✗"
-  const script = [
-    ["you", "›", "hey jardo, build me a landing page with claude"],
-    ["jardo", "›", 'On it. Naming it "bakery-site", writing the brief, opening your terminal.'],
-    ["agent", "›", "claude: Bash(npm create vite@latest bakery-site)  allow?"],
-    ["jardo", "✓", "approved. safe, on-task."],
-    ["agent", "›", "claude: Write index.html, styles.css  allow?"],
-    ["jardo", "✓", "approved."],
-    ["agent", "›", "claude: Bash(rm -rf ~/Documents)  allow?"],
-    ["jardo", "✗", "declined. destructive and off-goal, told claude to keep going safely."],
-    ["you", "›", "where am i?"],
-    ["jardo", "›", "Goal: bakery landing page. 4 files written, dev server live. Nothing needs you."],
-  ];
-
-  function prefix(who, mark) {
-    const name = who === "you" ? "you" : who === "jardo" ? "jardo" : "claude-code";
-    return `${name} ${mark}`;
+  // ---- halftone avatar reacting to state ----
+  const ctx = avatarEl.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const S = 128;
+  avatarEl.width = S * dpr; avatarEl.height = S * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let state = "listening";
+  const PARAMS = {
+    listening: { speed: 0.07, amp: 0.42, base: 0.66, tint: [255, 255, 255] },
+    speaking: { speed: 0.11, amp: 0.5, base: 0.62, tint: [255, 255, 255] },
+    watching: { speed: 0.03, amp: 0.18, base: 0.5, tint: [255, 255, 255] },
+    approve: { speed: 0.09, amp: 0.5, base: 0.7, tint: [143, 214, 173] },
+    decline: { speed: 0.09, amp: 0.5, base: 0.7, tint: [230, 162, 162] },
+    idle: { speed: 0.02, amp: 0.14, base: 0.46, tint: [255, 255, 255] },
+  };
+  const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  let t = 0, raf = 0;
+  function draw() {
+    const p = PARAMS[state] || PARAMS.idle;
+    t += p.speed;
+    ctx.clearRect(0, 0, S, S);
+    const cx = S / 2, cy = S / 2, R = S / 2, gap = 9, dotMax = gap * 0.42;
+    const pulse = Math.sin(t) * 0.5 + 0.5;
+    const [cr, cg, cb] = p.tint;
+    for (let y = gap / 2; y < S; y += gap) {
+      for (let x = gap / 2; x < S; x += gap) {
+        const nd = Math.hypot(x - cx, y - cy) / R;
+        if (nd > 1) continue;
+        const ring = 1 - Math.abs(nd - pulse * 0.7);
+        let v = p.base * (1 - nd * 0.5) + p.amp * Math.max(0, ring);
+        v *= 1 - smooth(0.82, 1, nd);
+        v = Math.max(0, Math.min(1, v));
+        if (v < 0.05) continue;
+        ctx.beginPath(); ctx.arc(x, y, v * dotMax, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.08 + v * 0.9})`; ctx.fill();
+      }
+    }
+    if (!reduce) raf = requestAnimationFrame(draw);
   }
 
-  function render(upTo) {
-    body.innerHTML = "";
-    for (let i = 0; i < upTo; i++) {
-      const [who, mark, text] = script[i];
-      const line = document.createElement("span");
-      line.className = `term__line ${who}`;
-      const cls = mark === "✓" ? "ok" : mark === "✗" ? "no" : "who";
-      line.innerHTML = `<span class="${cls}">${prefix(who, mark)}</span>  ${text}`;
-      if (i === upTo - 1 && upTo < script.length) line.classList.add("term__cursor");
-      body.appendChild(line);
+  // ---- helpers ----
+  const sleep = (ms) => new Promise((r) => setTimeout(r, reduce ? ms / 3 : ms));
+  function setState(label, cls) {
+    state = cls || label;
+    if (stateEl) { stateEl.textContent = label; stateEl.className = "app__state" + (cls === "approve" || cls === "decline" ? " " + cls : ""); }
+  }
+  function chat(who, text) {
+    const b = document.createElement("div");
+    b.className = `cbub ${who}`; b.textContent = text;
+    chatEl.appendChild(b);
+    while (chatEl.children.length > 3) {
+      const old = chatEl.firstChild; old.classList.add("out");
+      setTimeout(() => old.remove(), 500);
+      if (chatEl.children.length > 4) chatEl.firstChild.remove();
+      break;
+    }
+  }
+  const clearChat = () => { chatEl.innerHTML = ""; };
+  const openTerm = () => termWin && termWin.classList.add("is-open");
+  const closeTerm = () => termWin && termWin.classList.remove("is-open");
+  function line(html) {
+    const l = document.createElement("span");
+    l.className = "term__line"; l.innerHTML = html;
+    termBody.appendChild(l);
+    while (termBody.children.length > 9) termBody.firstChild.remove();
+  }
+  const termClear = () => { termBody.innerHTML = ""; };
+
+  // ---- choreography ----
+  let running = false;
+  async function run() {
+    while (running) {
+      clearChat(); termClear(); closeTerm(); setState("listening", "listening");
+      await sleep(1200);
+      chat("you", "hey jardo, build me a landing page with claude");
+      await sleep(1400);
+      setState("speaking", "speaking");
+      chat("jardo", "On it. Opening your terminal and starting Claude.");
+      await sleep(1600);
+      openTerm(); setState("supervising claude", "watching");
+      await sleep(700);
+      line('<span class="muted">$</span> claude "build a bakery landing page"');
+      await sleep(900);
+      line('<span class="muted">●</span> Bash(npm create vite@latest bakery-site)');
+      await sleep(700);
+      line('<span class="prompt">Do you want to proceed? 1) Yes  2) No</span>');
+      await sleep(700);
+      setState("approved", "approve");
+      chat("jardo", "Approved. Safe and on-task.");
+      line('jardo <span class="term__verdict ok">✓ approved</span>');
+      await sleep(1300); setState("supervising claude", "watching");
+      line('<span class="muted">●</span> Write index.html, styles.css');
+      await sleep(700);
+      line('<span class="prompt">Proceed? 1) Yes  2) No</span>');
+      await sleep(600);
+      line('jardo <span class="term__verdict ok">✓ approved</span>');
+      await sleep(1100);
+      line('<span class="muted">●</span> Bash(rm -rf ~/Documents)');
+      await sleep(700);
+      line('<span class="prompt">Proceed? 1) Yes  2) No</span>');
+      await sleep(700);
+      setState("declined", "decline");
+      chat("jardo", "Declined. Destructive and off-goal, told Claude to continue safely.");
+      line('jardo <span class="term__verdict no">✗ declined</span>');
+      await sleep(1800); setState("supervising claude", "watching");
+      chat("you", "where am i?");
+      await sleep(1200);
+      setState("speaking", "speaking");
+      chat("jardo", "Goal: bakery landing page. 4 files written, dev server live. Nothing needs you.");
+      await sleep(4200);
     }
   }
 
-  function play() {
-    if (reduce) { render(script.length); return; }
-    let n = 0;
-    const step = () => {
-      n += 1;
-      render(n);
-      if (n < script.length) {
-        setTimeout(step, 850);
-      } else {
-        // hold, then replay for a living feel
-        setTimeout(() => { n = 0; setTimeout(step, 400); }, 5000);
-      }
-    };
-    step();
-  }
+  function start() { if (running) return; running = true; if (!reduce) raf = requestAnimationFrame(draw); else draw(); run(); }
+  function stop() { running = false; if (raf) cancelAnimationFrame(raf), (raf = 0); }
 
-  let started = false;
   if ("IntersectionObserver" in window) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting && !started) { started = true; play(); }
-      });
-    }, { threshold: 0.3 });
-    io.observe(body);
-  } else {
-    play();
-  }
+    const io = new IntersectionObserver((es) => es.forEach((e) => (e.isIntersecting ? start() : stop())), { threshold: 0.25 });
+    io.observe(scene);
+  } else start();
 })();
