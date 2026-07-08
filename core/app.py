@@ -836,9 +836,14 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
             RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b"), msgs)
         return r.content
 
+    # The folder-trust prompt Claude shows on first launch in a new directory:
+    # trusting the owner's own project (or one Jardo just created) is their
+    # intent, so approve it — it isn't a shell command to vet.
+    if prompt.kind == "trust":
+        decision = Decision(True, "trusting your project folder", "low")
     # Fail safe (audit #4): if we couldn't confidently isolate the command being
     # asked about, decline rather than approve on a misread.
-    if not prompt.action.strip():
+    elif not prompt.action.strip():
         decision = Decision(False, "couldn't read the command clearly — declined "
                             "to be safe", "low")
     else:

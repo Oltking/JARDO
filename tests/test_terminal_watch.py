@@ -92,6 +92,29 @@ def test_ignores_ordinary_output():
     assert detect_permission_prompt("just some logs\nmore logs\n") is None
 
 
+CLAUDE_TRUST = """\
+╭──────────────────────────────────────────────────────────────╮
+│ Do you trust the files in this folder?                       │
+│                                                              │
+│ /Users/dev/projects/new-app                                  │
+│                                                              │
+│ Claude Code may read files in this folder.                   │
+│                                                              │
+│ ❯ 1. Yes, proceed                                            │
+│   2. No, exit                                                │
+╰──────────────────────────────────────────────────────────────╯
+"""
+
+
+def test_detects_folder_trust_prompt():
+    # Claude's FIRST prompt in a new folder — onboarding stalls if this is missed.
+    p = detect_permission_prompt(CLAUDE_TRUST)
+    assert p is not None
+    assert p.kind == "trust"
+    assert p.approve_key == "1"  # "Yes, proceed"
+    assert p.deny_key == "2"     # "No, exit"
+
+
 def test_question_without_options_or_yn_does_not_fire():
     # Prose that merely contains a question must never trigger a keypress.
     prose = "● I could refactor this. Do you want me to explain the approach first?"

@@ -30,6 +30,7 @@ class PermissionPrompt:
     approve_key: str     # key that means "yes" (e.g. "1" or "y")
     deny_key: str        # key that means "no"  (e.g. "3" or "n")
     numbered: bool       # numbered menu (key alone confirms) vs (y/n) (needs return)
+    kind: str = "command"  # "command" | "trust" (folder-trust prompt on first launch)
 
 
 _BORDER_CHARS = "│┃╎┆┇┊┋╏|┌┐└┘├┤┬┴┼─━╭╮╰╯╱╲╳ \t"
@@ -45,12 +46,15 @@ def _strip_borders(line: str) -> str:
 
 
 # Questions a coding agent asks before doing something. Kept broad but anchored
-# on the "do you want / proceed / allow / apply" shapes Claude Code and Gemini use.
+# on the "do you want / trust / proceed / allow / apply" shapes Claude Code and
+# Gemini use. "do you trust this folder?" is the FIRST thing Claude asks when it
+# opens a new directory — Jardo must catch it or onboarding stalls immediately.
 _QUESTION = re.compile(
-    r"(do you want (?:to )?[^\n?]*\?|proceed\?|allow this[^\n?]*\?|"
-    r"apply (?:this )?(?:edit|change)[^\n?]*\?)",
+    r"(do you want (?:to )?[^\n?]*\?|do you trust[^\n?]*\?|proceed\?|"
+    r"allow this[^\n?]*\?|apply (?:this )?(?:edit|change)[^\n?]*\?)",
     re.IGNORECASE,
 )
+_TRUST = re.compile(r"do you trust|trust the files|trust this folder", re.IGNORECASE)
 # A numbered option line: "❯ 1. Yes", "  2. Yes, and don't ask again", "3. No…".
 _OPTION = re.compile(r"^\s*[❯>*]?\s*(\d+)[.)]\s+(.*\S)\s*$", re.MULTILINE)
 _YN = re.compile(r"\(\s*y\s*/\s*n\s*\)\s*[:?]?\s*$", re.IGNORECASE)
@@ -80,13 +84,15 @@ def detect_permission_prompt(text: str) -> PermissionPrompt | None:
             if approve is None or deny is None:
                 return None
             action = _preceding_action(tail, q.start())
+            kind = "trust" if _TRUST.search(q.group(0)) else "command"
             return PermissionPrompt(action, q.group(0).strip(), approve_key=approve,
-                                    deny_key=deny, numbered=True)
+                                    deny_key=deny, numbered=True, kind=kind)
         # A question plus an explicit (y/n) marker is the only other real prompt.
         if _YN.search(tail):
             action = _preceding_action(tail, q.start())
-            return PermissionPrompt(action, q.group(0).strip(),
-                                    approve_key="y", deny_key="n", numbered=False)
+            kind = "trust" if _TRUST.search(q.group(0)) else "command"
+            return PermissionPrompt(action, q.group(0).strip(), approve_key="y",
+                                    deny_key="n", numbered=False, kind=kind)
         # A question with neither numbered options nor (y/n) is just prose —
         # never press a key on that.
         return None
