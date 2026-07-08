@@ -8,6 +8,7 @@ import {
   type RoutedIntent,
   setProjectsRoot,
   startProject,
+  terminalObserve,
   terminalSupervise,
   terminalTick,
   voiceSay,
@@ -161,6 +162,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const convRef = useRef<string | null>(null);
   const superRef = useRef<Supervising | null>(null);
   const pendingRef = useRef<Supervising | null>(null); // onboarding awaiting a yes
+  const lastStateRef = useRef<string>(""); // last observed agent state (dedupe)
   const scrollRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
@@ -514,6 +516,46 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         busy = false;
       }
     }, 2000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supervising]);
+
+  // Comprehension beat (Jardo's eyes): on a slow timer, judge whether the agent
+  // is progressing, stuck, off-task, or done — and speak up only when it's
+  // notable and the state has changed, so it's a heads-up, not a running monologue.
+  useEffect(() => {
+    if (!supervising) return;
+    lastStateRef.current = "";
+    let alive = true;
+    let busy = false;
+    const timer = setInterval(async () => {
+      if (!alive || !superRef.current || busy) return;
+      busy = true;
+      try {
+        const o = await terminalObserve();
+        if (!alive || !superRef.current) return;
+        const state = o.state || "";
+        if (o.notable && state && state !== lastStateRef.current) {
+          lastStateRef.current = state;
+          const label =
+            state === "stuck" ? "⚠ Looks stuck" :
+            state === "off_task" ? "⚠ Drifting off-task" :
+            state === "done" ? "✓ Looks done" : state;
+          const line = o.note ? `${label} — ${o.note}` : label;
+          say("event", line, state === "done");
+          await speak(o.note || label);
+        } else if (state && state !== "unknown") {
+          lastStateRef.current = state;
+        }
+      } catch {
+        /* transient — try again next beat */
+      } finally {
+        busy = false;
+      }
+    }, 25000);
     return () => {
       alive = false;
       clearInterval(timer);

@@ -738,6 +738,47 @@ async def terminal_supervise(request: WatchStartRequest,
     return {"watching": True, "goal": objective, "agent": request.agent}
 
 
+@app.post("/terminal/observe")
+async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict:
+    """Comprehension beat: read the agent's recent output and judge whether it's
+    progressing, stuck, off-task, or done. The desktop calls this on a slow timer
+    while supervising, so Jardo notices trouble — not just permission prompts.
+    Needs a capable model; returns state 'unknown' otherwise."""
+    from core.agents import terminal_watch
+    from core.observer import build_messages, parse_observation
+    from core.supervision import get_active
+
+    active = await get_active(session)
+    if active is None:
+        return {"watching": False}
+    if not providers.configured():
+        return {"state": "unknown", "note": "add a cloud key so I can read what "
+                "the agent is doing"}
+
+    window_id = getattr(app.state, "supervise_window_id", None)
+    try:
+        screen = terminal_watch.read_terminal(window_id)
+    except Exception as exc:  # noqa: BLE001
+        return {"state": "unknown", "readable": False, "detail": str(exc)}
+
+    # A pending prompt is the tick's job; report waiting so we don't double up.
+    if terminal_watch.detect_permission_prompt(screen) is not None:
+        return {"state": "waiting", "note": "waiting on a permission decision"}
+
+    tail = "\n".join(screen.splitlines()[-30:])
+    chosen = providers.configured()[0]
+    model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+    try:
+        client = FireworksClient(providers.api_key(chosen), providers.base_url(chosen),
+                                 timeout=30)
+        result = await client.chat(providers.resolve_model(chosen, model),
+                                   build_messages(active.objective, tail),
+                                   max_tokens=400, temperature=0.0)
+        return parse_observation(result.content)
+    except Exception:  # noqa: BLE001 — transient → say nothing this beat
+        return {"state": "unknown"}
+
+
 @app.post("/terminal/tick")
 async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     """One supervision beat: read the terminal, and if the agent is waiting on a

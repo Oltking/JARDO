@@ -286,6 +286,21 @@ export async function terminalTick(): Promise<TickResult> {
   }
 }
 
+export interface Observation {
+  watching?: boolean;
+  state?: "progressing" | "stuck" | "off_task" | "done" | "idle" | "waiting" | "unknown";
+  note?: string;
+  notable?: boolean;
+}
+
+export async function terminalObserve(): Promise<Observation> {
+  try {
+    return await invoke<Observation>("terminal_observe");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 // ---- Voice (spec §8) ------------------------------------------------------
 
 export interface VoiceInputDevice {
