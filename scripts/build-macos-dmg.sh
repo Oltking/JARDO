@@ -11,12 +11,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [ ! -x "desktop/src-tauri/resources/jardo-core/jardo-core" ]; then
-  echo "==> Freezing the Python core (sidecar)…"
-  ./scripts/build-core-binary.sh
+# Always refreshe the frozen core so a release DMG can never bundle stale code.
+# (Set JARDO_SKIP_CORE_BUILD=1 to reuse the staged one during rapid shell-only iteration.)
+if [ "${JARDO_SKIP_CORE_BUILD:-0}" = "1" ] && [ -x "desktop/src-tauri/resources/jardo-core/jardo-core" ]; then
+  echo "==> JARDO_SKIP_CORE_BUILD=1 — reusing staged core (may be stale)"
 else
-  echo "==> Using already-staged core at desktop/src-tauri/resources/jardo-core"
-  echo "    (delete it to force a rebuild)"
+  echo "==> Freezing the Python core (sidecar) from current source…"
+  ./scripts/build-core-binary.sh
 fi
 
 cd desktop
