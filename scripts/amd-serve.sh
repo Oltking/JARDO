@@ -1,71 +1,60 @@
 #!/usr/bin/env bash
-# Serve Gemma on your AMD Instinct droplet (ROCm + vLLM), OpenAI-compatible, and
-# expose it with a public URL to paste into Vercel (AMD_BASE_URL). Run this in the
-# droplet's JupyterLab **Terminal** (Launcher → Other → Terminal).
+# Serve Gemma on your AMD Instinct droplet via PyTorch/ROCm + transformers (no
+# vLLM/CUDA), OpenAI-compatible, and expose it publicly to paste into Vercel.
 #
-#   bash amd-serve.sh
-#
-# Then copy the printed https URL into Vercel env AMD_BASE_URL (+ AMD_API_KEY,
-# AMD_MODEL=gemma) and redeploy. Jardo then serves inference from the AMD GPU.
+# Run in the droplet's JupyterLab Terminal, in the same folder as
+# amd_openai_server.py:
+#     export HF_TOKEN=hf_xxx        # Read token; accept Gemma's license first
+#     bash amd-serve.sh
 set -euo pipefail
 
-# ---- config (edit these) --------------------------------------------------
-MODEL="${MODEL:-google/gemma-2-9b-it}"   # HF id; gemma-2-9b fits one MI300X easily
-SERVED_NAME="${SERVED_NAME:-gemma}"      # the name Jardo/clients call it by
-API_KEY="${API_KEY:-jardo-amd-$(openssl rand -hex 6)}"  # protects the endpoint
+MODEL="${MODEL:-google/gemma-2-9b-it}"
+SERVED_NAME="${SERVED_NAME:-gemma}"
+API_KEY="${API_KEY:-jardo-amd-$(python3 -c 'import secrets;print(secrets.token_hex(6))')}"
 PORT="${PORT:-8000}"
-export HF_TOKEN="${HF_TOKEN:-}"          # needed: Gemma is gated on Hugging Face
+export MODEL SERVED_NAME API_KEY
 
-if [ -z "$HF_TOKEN" ]; then
-  echo "!! Set HF_TOKEN first (accept Gemma's license at huggingface.co/${MODEL}):"
-  echo "   export HF_TOKEN=hf_xxx ; bash amd-serve.sh"
-  exit 1
-fi
+[ -z "${HF_TOKEN:-}" ] && { echo "!! export HF_TOKEN=hf_xxx first (accept license at huggingface.co/$MODEL)"; exit 1; }
 
-echo "==> GPUs / ROCm:"; rocm-smi --showproductname 2>/dev/null | sed -n '1,6p' || echo "(rocm-smi not found; ensure this is the AMD ROCm instance)"
+echo "==> GPU check (ROCm PyTorch):"
+python3 -c "import torch;print('  torch',torch.__version__,'| gpu available:',torch.cuda.is_available(),'| hip:',getattr(torch.version,'hip',None))" \
+  || { echo '!! torch not importable — this must run in the ROCm python env'; exit 1; }
 
-# ---- vLLM (ROCm build) ----------------------------------------------------
-if ! python -c "import vllm" 2>/dev/null; then
-  echo "==> Installing vLLM (ROCm). If this fails, use the container instead:"
-  echo "    docker run -it --network=host --device=/dev/kfd --device=/dev/dri \\"
-  echo "      -e HF_TOKEN=\$HF_TOKEN rocm/vllm:latest \\"
-  echo "      vllm serve $MODEL --served-model-name $SERVED_NAME --api-key $API_KEY --port $PORT"
-  pip install -q vllm || { echo "pip vllm failed — use the rocm/vllm docker line above"; exit 1; }
-fi
+echo "==> Installing server deps (transformers, accelerate, fastapi, uvicorn)…"
+pip install -q -U "transformers>=4.44" accelerate fastapi "uvicorn[standard]" huggingface_hub
+python3 -c "from huggingface_hub import login; import os; login(os.environ['HF_TOKEN'])"
 
-# ---- public URL via cloudflared quick tunnel (no account needed) ----------
-if ! command -v cloudflared >/dev/null 2>&1; then
-  echo "==> Fetching cloudflared…"
-  curl -fsSL -o /tmp/cloudflared \
-    https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-  chmod +x /tmp/cloudflared; export PATH="/tmp:$PATH"
-fi
-
-echo "==> Starting vLLM ($MODEL as '$SERVED_NAME') on :$PORT …"
-python -m vllm.entrypoints.openai.api_server \
-  --model "$MODEL" --served-model-name "$SERVED_NAME" \
-  --api-key "$API_KEY" --port "$PORT" --gpu-memory-utilization 0.9 &
-VLLM_PID=$!
-
-echo "==> Waiting for vLLM to load the model…"
-for i in $(seq 1 90); do
-  sleep 5
-  curl -s -o /dev/null "http://127.0.0.1:$PORT/v1/models" -H "Authorization: Bearer $API_KEY" && break
+echo "==> Starting the AMD/ROCm OpenAI server on :$PORT (model load can take a few min)…"
+python3 -m uvicorn amd_openai_server:app --host 0.0.0.0 --port "$PORT" &
+SRV=$!
+for i in $(seq 1 120); do sleep 5
+  curl -s -o /dev/null -H "Authorization: Bearer $API_KEY" "http://127.0.0.1:$PORT/v1/models" && { echo "  server up"; break; }
 done
 
-echo ""
-echo "==> Opening a public tunnel…"
-/tmp/cloudflared tunnel --url "http://127.0.0.1:$PORT" 2>&1 | tee /tmp/cf.log &
-sleep 8
-URL=$(grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /tmp/cf.log | head -1)
+echo "==> Exposing a public URL…"
+# The download host uses a TLS-inspecting proxy here, so -k is needed for this binary.
+if ! command -v cloudflared >/dev/null 2>&1; then
+  curl -kfsSL -o /tmp/cloudflared \
+    https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+    && chmod +x /tmp/cloudflared && export PATH="/tmp:$PATH" \
+    || echo "  (cloudflared download failed — see the 'Plan B' note printed below)"
+fi
+if command -v cloudflared >/dev/null 2>&1; then
+  cloudflared tunnel --url "http://127.0.0.1:$PORT" >/tmp/cf.log 2>&1 &
+  sleep 10
+  URL=$(grep -oE "https://[a-z0-9-]+\.trycloudflare\.com" /tmp/cf.log | head -1)
+fi
 
 echo ""
 echo "==================================================================="
-echo "  AMD inference is LIVE. Put these in Vercel → Settings → Env Vars:"
-echo "    AMD_BASE_URL = ${URL:-<see /tmp/cf.log>}/v1"
+echo "  AMD inference is LIVE (Gemma on ROCm). Put in Vercel env vars:"
+echo "    AMD_BASE_URL = ${URL:-<no tunnel — try the proxy URL, Plan B>}/v1"
 echo "    AMD_API_KEY  = $API_KEY"
 echo "    AMD_MODEL    = $SERVED_NAME"
-echo "  Then redeploy. Jardo will serve from the AMD GPU (ROCm) first."
+echo ""
+echo "  Plan B if no tunnel URL: this JupyterLab likely proxies ports, so try:"
+echo "    https://radeon-global.anruicloud.com/instances/hf-254-7ebcfd21/proxy/$PORT/v1"
+echo "  Redeploy Vercel, then: curl https://jardo.vercel.app/api/status"
 echo "  Keep this terminal open (Ctrl-C stops the server)."
 echo "==================================================================="
-wait $VLLM_PID
+wait $SRV
