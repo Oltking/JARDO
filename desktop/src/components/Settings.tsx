@@ -186,9 +186,21 @@ export function Settings() {
 
       <h2>Providers</h2>
       <p className="settings-lead">
-        Paste an inference key and Jardo starts using it. When more than one is
-        ready it prefers the cheaper self-hosted option (AMD).
+        Every new install includes a small amount of <strong>free trial compute</strong> on us —
+        Fireworks AI and AMD-hosted inference, so Jardo thinks and supervises out of the box.
+        When that runs out, <em>adding your own key is optional</em>: paste a Fireworks or AMD
+        Developer Cloud key below to keep cloud inference on your account, or continue with
+        Ollama locally at zero cost. Jardo prefers the cheaper self-hosted option (AMD) when
+        both are configured.
       </p>
+      <div className="provider-card trial-note">
+        <p>
+          <strong>Your keys, your choice.</strong> Keys live in the macOS Keychain — never in files.
+          Trial compute is a gift to get you started; your own Fireworks or AMD endpoint means
+          you control spend and limits. Skip cloud entirely and Jardo still listens, supervises,
+          and remembers — on-device.
+        </p>
+      </div>
 
       {providers.map((p) => {
         const needsUrl = p.name === "amd";

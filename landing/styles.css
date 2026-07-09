@@ -213,6 +213,34 @@ section { position: relative; }
 .step code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em; color: var(--ink-dim); background: rgba(255,255,255,0.05); padding: 0.1em 0.4em; border-radius: 4px; }
 @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
 
+/* ─────────────── device memory ─────────────── */
+.memory {
+  padding: 9rem var(--gutter); border-top: 1px solid var(--line-soft);
+  display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(2rem, 6vw, 5rem);
+  max-width: calc(var(--maxw) + 4rem); margin: 0 auto; align-items: center;
+}
+.memory__lede { color: var(--ink-dim); margin: 1.4rem 0 1.8rem; font-size: 1.06rem; line-height: 1.65; }
+.memory__lede strong { color: var(--white); font-weight: 600; }
+.memory__lede em { color: var(--ink); font-style: italic; }
+.memory__list { list-style: none; display: grid; gap: 0.9rem; }
+.memory__list li { position: relative; padding-left: 1.6rem; color: var(--muted); font-size: 0.98rem; }
+.memory__list li::before { content: ""; position: absolute; left: 0; top: 0.62em; width: 7px; height: 7px; border-radius: 50%; background: var(--white); }
+.memcard {
+  background: var(--bg-2); border: 1px solid var(--line); border-radius: 14px;
+  padding: 2rem 1.8rem; box-shadow: 0 30px 80px -40px rgba(0,0,0,0.9);
+}
+.memcard__tag {
+  display: inline-block; font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; margin-bottom: 1rem;
+}
+.memcard h4 { font-family: var(--serif); font-weight: 400; font-size: 1.5rem; margin-bottom: 1.2rem; }
+.memcard dl { display: grid; gap: 0.85rem; margin: 0; }
+.memcard dl div { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.75rem; font-size: 0.92rem; }
+.memcard dt { color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.72rem; padding-top: 2px; }
+.memcard dd { color: var(--ink-dim); margin: 0; }
+.memcard__foot { margin-top: 1.4rem; font-size: 0.82rem; color: var(--faint); }
+@media (max-width: 900px) { .memory { grid-template-columns: 1fr; } }
+
 /* ─────────────── cost ─────────────── */
 .cost {
   padding: 9rem var(--gutter); border-top: 1px solid var(--line-soft);
@@ -229,6 +257,19 @@ section { position: relative; }
 .stat__num { display: block; font-family: var(--serif); font-weight: 300; font-size: clamp(2.6rem, 6vw, 3.8rem); line-height: 1; letter-spacing: -0.02em; }
 .stat__label { display: block; margin-top: 0.7rem; color: var(--muted); font-size: 0.9rem; max-width: 34ch; }
 @media (max-width: 900px) { .cost { grid-template-columns: 1fr; } }
+
+/* ─────────────── compute stack ─────────────── */
+.compute { padding: 9rem var(--gutter); border-top: 1px solid var(--line-soft); }
+.compute__grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+  background: var(--line-soft); border: 1px solid var(--line);
+  max-width: var(--maxw); margin: 0 auto;
+}
+.ccard { background: var(--bg); padding: 2.4rem clamp(1.5rem, 3vw, 2.4rem); transition: background 0.4s var(--ease); }
+.ccard:hover { background: var(--bg-2); }
+.ccard h4 { font-family: var(--serif); font-weight: 400; font-size: 1.35rem; margin-bottom: 0.75rem; }
+.ccard p { color: var(--muted); font-size: 0.96rem; line-height: 1.6; }
+@media (max-width: 720px) { .compute__grid { grid-template-columns: 1fr; } }
 
 /* ─────────────── trust ─────────────── */
 .trust { padding: 9rem var(--gutter); border-top: 1px solid var(--line-soft); }
@@ -319,6 +360,8 @@ section { position: relative; }
 .trial__lede { color: var(--ink-dim); font-size: 1.1rem; line-height: 1.65; margin: 1.4rem auto 0; max-width: 60ch; }
 .trial__lede strong { color: var(--white); font-weight: 600; }
 .trial__stack { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; margin-top: 2.2rem; }
+.trial__optional { margin-top: 1rem; padding-top: 1.2rem; border-top: 1px solid var(--line-soft); }
+.trial__optional em { color: var(--ink-dim); font-style: italic; }
 .chip {
   font-size: 0.82rem; color: var(--ink-dim); padding: 8px 16px; border-radius: 100px;
   border: 1px solid var(--line); background: rgba(255,255,255,0.02);

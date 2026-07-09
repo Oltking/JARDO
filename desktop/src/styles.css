@@ -848,6 +848,12 @@ code {
 }
 .settings button.primary:hover:not(:disabled) { border-color: var(--dim); }
 .settings button.primary:disabled { opacity: 0.5; cursor: default; }
+.trial-note {
+  background: color-mix(in srgb, var(--ok) 6%, var(--elev));
+  border-color: color-mix(in srgb, var(--ok) 20%, var(--line));
+}
+.trial-note p { margin: 0; font-size: 13px; line-height: 1.55; color: var(--dim); }
+.trial-note strong { color: var(--text); }
 
 /* ================= Jardo — minimal voice-first shell ================= */
 .topbar {
@@ -886,8 +892,21 @@ code {
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-.stream { flex: 1; overflow-y: auto; padding: 22px 20px; display: flex; flex-direction: column; gap: 12px; }
-.line { display: flex; }
+.stream {
+  flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  padding: 22px 20px 28px; display: flex; flex-direction: column;
+}
+.stream.is-empty { overflow: hidden; }
+.stream.has-messages { justify-content: flex-start; }
+.welcome-screen {
+  flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+}
+.messages {
+  width: 100%; max-width: 720px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.stream-anchor { height: 1px; flex: none; }
+.line { display: flex; flex-shrink: 0; width: 100%; }
 .line.you { justify-content: flex-end; }
 .line.jardo { justify-content: flex-start; }
 .line.event { justify-content: center; }
@@ -904,7 +923,7 @@ code {
 .event-chip.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
 .event-chip.no { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
 
-.welcome { margin: auto; text-align: center; color: var(--dim); }
+.welcome { margin: 0; text-align: center; color: var(--dim); }
 .welcome-title { font-size: 22px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
 .welcome-sub { font-size: 14px; max-width: 340px; line-height: 1.55; margin: 0 auto; }
 
@@ -1048,9 +1067,7 @@ code {
 .drawer-body .empty { color: var(--faint); padding: 24px 0; text-align: center; }
 
 /* ---- Conversation width cap (wide windows) + mic toggle ---- */
-.stream { align-items: center; }
-.stream > .line { width: 100%; max-width: 720px; }
-.stream > .empty { max-width: 720px; }
+.dock-avatar-slot { overflow: visible; }
 .mic-toggle {
   background: var(--elev); border: 1px solid var(--line); border-radius: var(--radius-sm);
   color: var(--dim); font-size: 14px; padding: 7px 10px; cursor: pointer; flex: none;
@@ -1092,10 +1109,10 @@ code {
 .stat-label { font-size: 12px; color: var(--dim); }
 
 /* ---- Premium polish: messages glide in, softer bubbles ---- */
-.line { animation: msgIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.messages > .line { animation: msgIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
 @keyframes msgIn {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
+  to { opacity: 1; transform: translateY(0); }
 }
 .line.you .bubble {
   background: var(--elev-2);

@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Jardo · the AI chief of staff that conducts your coding agents</title>
+  <title>Jardo · the personal assistant that supervises your coding agents</title>
   <meta name="description" content="Jardo is a voice-first personal AI that supervises your coding agents. It answers their permission prompts against your goal, keeps them on-task, and routes every request to the cheapest capable model. Safe, continuous, and a fraction of the token cost." />
 
-  <meta property="og:title" content="Jardo · your AI chief of staff for coding agents" />
+  <meta property="og:title" content="Jardo · your personal assistant for coding agents" />
   <meta property="og:description" content="It conducts Claude Code and Gemini CLI while you're away: safely, continuously, and at a fraction of the token cost." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="assets/jardo-logo.png" />
@@ -29,8 +29,10 @@
     </a>
     <nav class="nav__links" aria-label="Primary">
       <a href="#supervise">Supervise</a>
+      <a href="#memory">Memory</a>
       <a href="#demo">Demo</a>
       <a href="#how">How it works</a>
+      <a href="#compute">Compute</a>
       <a href="#trust">Security</a>
       <a href="#trial">Free trial</a>
     </nav>
@@ -44,12 +46,13 @@
       <div class="hero__inner">
         <p class="eyebrow reveal">Voice-first · macOS · Security-first</p>
         <h1 class="hero__title reveal">
-          Your AI <em>chief&nbsp;of&nbsp;staff</em><br />for coding agents.
+          Your personal assistant<br />to <em>supervise</em> your coding agents.
         </h1>
         <p class="hero__sub reveal">
-          Jardo sits above Claude Code and Gemini CLI and <strong>runs them for you</strong>.
-          It answers every permission prompt against your goal, keeps the work on-task and safe,
-          and routes each request to the cheapest capable model.
+          Jardo is a voice-first AI chief of staff that sits above Claude Code and Gemini CLI
+          and <strong>runs them for you</strong>. It answers every permission prompt against your goal,
+          keeps the work on-task and safe, and routes each request to the cheapest capable model —
+          on AMD GPU compute, Fireworks AI, or fully local.
         </p>
         <div class="hero__actions reveal">
           <a class="btn btn--solid magnetic" href="#download">
@@ -88,13 +91,48 @@
         <span class="pillar__num">02</span>
         <h3>A memory</h3>
         <p>Ask <em>“where am I?”</em> and it tells you the goal, what's done, what's left, and what needs
-        your attention, pulled from the agent's own session memory and git, not an expensive codebase re-scan.</p>
+        your attention — pulled from the agent's own session memory and git, not an expensive codebase re-scan.
+        Jardo also learns <strong>how you work</strong>: preferences, goals, and style stay on your device,
+        per machine, so the assistant feels like yours everywhere you open it.</p>
       </div>
       <div class="pillar reveal">
         <span class="pillar__num">03</span>
         <h3>A cost engine</h3>
         <p>Every request is routed to the cheapest model that clears an accuracy bar, and cached
         aggressively. Premium results, without premium bills.</p>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── device memory ───────────────────────── -->
+    <section class="memory" id="memory">
+      <div class="memory__copy reveal">
+        <p class="eyebrow">Your work style, on-device</p>
+        <h2>Memory that travels with you — on this device.</h2>
+        <p class="memory__lede">
+          Jardo isn't a blank slate every time you open it. It carries a <strong>memory SHA of how you work</strong>:
+          your name, your projects folder, standing goals, preferences, and the patterns it learns from
+          supervising your agents. That profile lives <em>locally on your Mac</em> — not in the cloud — so
+          the same Jardo greets you on this device, with your context intact, session after session.
+        </p>
+        <ul class="memory__list">
+          <li>Owner identity, honorific, and projects root — set once, remembered forever</li>
+          <li>Facts and preferences extracted from chat, injected into every reply</li>
+          <li>Agent session memory + git for instant “where am I?” without re-scanning code</li>
+          <li>Per-device: your laptop's Jardo knows you; another machine has its own profile</li>
+        </ul>
+      </div>
+      <div class="memory__visual reveal">
+        <div class="memcard">
+          <span class="memcard__tag">on this device</span>
+          <h4>Memory profile</h4>
+          <dl>
+            <div><dt>Owner</dt><dd>Alex · projects ~/dev</dd></div>
+            <div><dt>Style</dt><dd>Small commits · conservative auto-approve</dd></div>
+            <div><dt>Active goal</dt><dd>Ship bakery landing page</dd></div>
+            <div><dt>Last session</dt><dd>4 files written · dev server live</dd></div>
+          </dl>
+          <p class="memcard__foot">Stored locally · never leaves unless you choose cloud inference</p>
+        </div>
       </div>
     </section>
 
@@ -169,20 +207,20 @@
       </div>
     </section>
 
-    <!-- ───────────────────────── cost ───────────────────────── -->
+    <!-- ───────────────────────── cost / compute ───────────────────────── -->
     <section class="cost" id="cost">
       <div class="cost__copy reveal">
         <p class="eyebrow">Cost as a first-class feature</p>
         <h2>Premium output.<br />A fraction of the bill.</h2>
         <p class="cost__lede">
-          A cost-accuracy router picks local → self-hosted → cloud by live $/token math. Exact and
-          semantic response caching means repeated work is <em>free</em>. Agent briefs push for small,
+          A cost-accuracy router picks local → AMD Instinct (ROCm · vLLM) → Fireworks AI by live $/token math.
+          Exact and semantic response caching means repeated work is <em>free</em>. Agent briefs push for small,
           committed steps that stay inside the session's token budget.
         </p>
         <ul class="cost__list">
-          <li>Cheapest capable model, every time</li>
+          <li>Cheapest capable model, every time — Ollama free, AMD flat-rate for sustained work, Fireworks for bursts</li>
           <li>Repeats served from cache at zero tokens</li>
-          <li>Bring your own Fireworks or AMD key, and it prefers the cheaper one</li>
+          <li>Bring your own Fireworks or AMD Developer Cloud key — optional after the free trial</li>
         </ul>
       </div>
       <div class="cost__stats">
@@ -197,6 +235,36 @@
         <div class="stat reveal">
           <span class="stat__num" data-count="100" data-suffix="%">0</span>
           <span class="stat__label">of the safety eval passing, a regression guard, not a hope</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── compute stack ───────────────────────── -->
+    <section class="compute" id="compute">
+      <header class="section-head reveal">
+        <p class="eyebrow">How we use the stack</p>
+        <h2>AMD GPU compute · Fireworks AI · AMD Developer Cloud</h2>
+      </header>
+      <div class="compute__grid">
+        <div class="ccard reveal">
+          <h4>AMD Instinct GPUs</h4>
+          <p>Self-hosted inference on MI300X-class hardware with ROCm and vLLM. Flat droplet cost wins for
+          sustained supervision — the router prefers AMD when both keys are configured and the math says so.</p>
+        </div>
+        <div class="ccard reveal">
+          <h4>Fireworks AI</h4>
+          <p>Instant cloud tier for bursts and fallback. Gemma and other models served with low latency.
+          Every new Mac gets a hosted trial on us — no signup — routed through our proxy until you add your own key.</p>
+        </div>
+        <div class="ccard reveal">
+          <h4>AMD Developer Cloud</h4>
+          <p>Bring your own endpoint from AMD Developer Cloud: paste your vLLM URL and key in Settings.
+          Jardo speaks OpenAI-compatible APIs — your compute, your spend, full control.</p>
+        </div>
+        <div class="ccard reveal">
+          <h4>Local-first layer</h4>
+          <p>Speech-to-text, TTS, wake handling, and memory recall run on your machine. Trivial tasks stay on
+          Ollama (free). Cloud is invoked only when the accuracy floor requires it.</p>
         </div>
       </div>
     </section>
@@ -226,19 +294,24 @@
           supervises. No account to make, no API key to paste, nothing to configure.
         </p>
         <p class="trial__lede">
-          Under the hood, that intelligence is <strong>Gemma</strong> served on
+          Under the hood, that intelligence is <strong>Gemma</strong> on
           <strong>AMD Instinct GPUs</strong> with <strong>ROCm</strong> and vLLM,
           with <strong>Fireworks AI</strong> as the instant cloud tier and automatic
           fallback. Jardo routes every request to the cheapest capable model and
-          caches aggressively, so a little goes a long way. When your trial ends,
-          drop in your own key in Settings, or point it at Ollama for fully local.
+          caches aggressively, so a little goes a long way.
+        </p>
+        <p class="trial__lede trial__optional">
+          When your trial compute runs out, <strong>you can keep going without interruption</strong> —
+          adding your own Fireworks or AMD Developer Cloud key in Settings is <em>optional</em>, not required
+          to keep using Jardo locally. Paste a key only if you want cloud inference on your account; otherwise
+          point at Ollama for fully local, key-free chat.
         </p>
         <div class="trial__stack">
           <span class="chip">Gemma</span>
           <span class="chip">AMD Instinct · ROCm · vLLM</span>
           <span class="chip">Fireworks AI</span>
           <span class="chip">Local-first STT &amp; memory</span>
-          <span class="chip">Bring your own key</span>
+          <span class="chip">AMD Developer Cloud · BYOK</span>
         </div>
         <p class="trial__status" id="trialStatus" aria-live="polite"></p>
       </div>
@@ -262,7 +335,7 @@
         </div>
         <p class="download__fine">
           Unsigned early build: after downloading, <strong>right-click → Open</strong> to get past Gatekeeper.
-          Add your own model key in Settings on first run.
+          Use the included trial compute first; adding your own model key in Settings is optional.
         </p>
       </div>
     </section>
@@ -274,7 +347,7 @@
       <img src="assets/jardo-logo.png" alt="" class="brand__mark" />
       <span class="brand__word">Jardo</span>
     </div>
-    <p class="foot__tag">Your voice-first AI chief of staff. It conducts your coding agents while you're away.</p>
+    <p class="foot__tag">Your personal assistant to supervise coding agents — safely, continuously, and at a fraction of the token cost.</p>
     <p class="foot__copy">© <span id="year">2026</span> Jardo. Built security-first.</p>
   </footer>
 

@@ -45,5 +45,10 @@ evals/scores.json
 desktop/src-tauri/resources/jardo-core/*
 !desktop/src-tauri/resources/jardo-core/PLACEHOLDER
 
+# Investor deck — local only, not for the repo
+investor/
+Jardo-Investor-Deck.pptx
+*.pptx
+
 # PyInstaller work dir (frozen core is built, never committed)
 build/

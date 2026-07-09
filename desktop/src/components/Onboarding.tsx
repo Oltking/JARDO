@@ -97,9 +97,10 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             <h1 className="onboard-title">You're set — the first $1 is on me.</h1>
             <p className="onboard-sub">
               Skip this and start right away on your free trial; I'll think, talk, and
-              supervise with no key needed. When it runs out, paste your own Fireworks
-              key here (or later in Settings) to keep going at cost. Keys live in the
-              macOS Keychain, never in a file.
+              supervise with no key needed. When it runs out, adding your own key is
+              optional: paste Fireworks here or add Fireworks/AMD Developer Cloud later
+              in Settings for cloud inference, or keep using local Ollama. Keys live in
+              the macOS Keychain, never in a file.
             </p>
             <label className="onboard-field">
               <span>Fireworks API key (optional)</span>

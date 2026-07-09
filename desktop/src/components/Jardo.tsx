@@ -204,17 +204,23 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const pendingRef = useRef<Supervising | null>(null); // onboarding awaiting a yes
   const lastStateRef = useRef<string>(""); // last observed agent state (dedupe)
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
   const nameRef = useRef<string | null>(null);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
-    requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
   }
+
+  // Keep the transcript pinned to the latest line — separate from the welcome
+  // screen so new bubbles never overlap earlier ones when the view fills up.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || lines.length === 0) return;
+    bottomRef.current?.scrollIntoView({ block: "end" });
+    el.scrollTop = el.scrollHeight;
+  }, [lines]);
 
   // Speak, but muffle the mic while we do it (and for a moment after) so Jardo
   // never hears its own voice and answers itself.
@@ -894,8 +900,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       {noKey && !needsSetup && (
         <div className="banner hint">
           <span>
-            👋 To make me sharp, open <strong>⋯ → Providers</strong> and paste a
-            Fireworks key. Until then I'm on a small local model.
+            👋 You're on our free trial compute (Fireworks + AMD). To use your own account later,
+            open <strong>⋯ → Providers</strong> — optional. Until then I'm on hosted inference
+            or a small local model.
           </span>
           <button className="link-btn" onClick={() => setNoKey(false)}>
             got it
@@ -915,31 +922,37 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         </div>
       )}
 
-      <div className="stream" ref={scrollRef}>
-        {lines.length === 0 && (
-          <div className="empty welcome">
-            <span className={`welcome-avatar ${avatarState}`}>
-              <HalftoneAvatar state={avatarState} size={132} />
-            </span>
-            <p className="welcome-title">Jardo</p>
-            <p className="welcome-sub">
-              I'm listening. Say “where am I?” to pick up where you left off, or
-              “supervise Claude in my terminal” and I'll handle the permission
-              prompts for you.
-            </p>
+      <div className={`stream ${lines.length > 0 ? "has-messages" : "is-empty"}`} ref={scrollRef}>
+        {lines.length === 0 ? (
+          <div className="welcome-screen">
+            <div className="welcome">
+              <span className={`welcome-avatar ${avatarState}`}>
+                <HalftoneAvatar state={avatarState} size={132} />
+              </span>
+              <p className="welcome-title">Jardo</p>
+              <p className="welcome-sub">
+                I'm listening. Say “where am I?” to pick up where you left off, or
+                “supervise Claude in your terminal” and I'll handle the permission
+                prompts for you.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="messages">
+            {lines.map((l, i) => (
+              <div key={i} className={`line ${l.who}`}>
+                {l.who === "event" ? (
+                  <span className={`event-chip ${l.ok ? "ok" : "no"}`}>
+                    {l.ok ? "✓" : "✗"} {l.text}
+                  </span>
+                ) : (
+                  <div className="bubble">{l.text}</div>
+                )}
+              </div>
+            ))}
+            <div ref={bottomRef} className="stream-anchor" aria-hidden="true" />
           </div>
         )}
-        {lines.map((l, i) => (
-          <div key={i} className={`line ${l.who}`}>
-            {l.who === "event" ? (
-              <span className={`event-chip ${l.ok ? "ok" : "no"}`}>
-                {l.ok ? "✓" : "✗"} {l.text}
-              </span>
-            ) : (
-              <div className="bubble">{l.text}</div>
-            )}
-          </div>
-        ))}
       </div>
 
       <div className="dock">

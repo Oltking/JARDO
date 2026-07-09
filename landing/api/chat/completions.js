@@ -103,8 +103,9 @@ module.exports = async (req, res) => {
     res.status(402).json({
       error: "trial_exhausted",
       message:
-        "Your free Jardo trial is used up. Add your own Fireworks API key in " +
-        "Settings → Providers to keep going.",
+        "Your free Jardo trial compute is used up. Add your own Fireworks or AMD " +
+        "Developer Cloud key in Settings → Providers for cloud inference, or keep " +
+        "using Jardo locally with Ollama.",
       trial_usd: FREE_TRIAL_USD,
       spent_usd: Number(spent.toFixed(4)),
     });
