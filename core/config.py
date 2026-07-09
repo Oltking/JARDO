@@ -44,6 +44,13 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _apply_gemma(self) -> "Settings":
+        # One switch: if a Gemma model is configured, run chat on it.
+        if self.gemma_model.strip():
+            self.chat_model = self.gemma_model.strip()
+        return self
+
+    @model_validator(mode="after")
     def _bundled_models(self) -> "Settings":
         # Frozen desktop build: use the voice model shipped inside the app so the
         # first run is offline and instant (no download). JARDO_BUNDLE_DIR is set
@@ -83,6 +90,12 @@ class Settings(BaseSettings):
     chat_model: str = "accounts/fireworks/models/gpt-oss-20b"
     # Fact-extraction worker uses the same cheap tier until the router exists.
     extraction_model: str = "accounts/fireworks/models/gpt-oss-20b"
+
+    # Gemma (hackathon "Best Use of Gemma" bonus). Set JARDO_GEMMA_MODEL to a
+    # Fireworks Gemma model id and Jardo runs chat on Gemma. Empty keeps the
+    # default above. Must be an id the Fireworks account can actually serve
+    # (verify via the proxy's /api/models?q=gemma), or chat will 404.
+    gemma_model: str = ""
 
     request_timeout_seconds: float = 120.0
     history_window: int = 20  # messages of context sent per chat turn
