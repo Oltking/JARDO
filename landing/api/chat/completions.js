@@ -19,6 +19,12 @@
 
 const FIREWORKS_BASE_URL =
   process.env.FIREWORKS_BASE_URL || "https://api.fireworks.ai/inference/v1";
+// AMD Instinct droplet (vLLM on ROCm), OpenAI-compatible. When set, we serve from
+// AMD first and fall back to Fireworks if it is unreachable, so users always work,
+// and self-hosted AMD compute doesn't count against the free trial.
+const AMD_BASE_URL = (process.env.AMD_BASE_URL || "").replace(/\/$/, "");
+const AMD_API_KEY = process.env.AMD_API_KEY || "";
+const AMD_MODEL = process.env.AMD_MODEL || ""; // vLLM --served-model-name
 const FREE_TRIAL_USD = parseFloat(process.env.FREE_TRIAL_USD || "1");
 const USD_PER_1M_TOKENS = parseFloat(process.env.USD_PER_1M_TOKENS || "0.30");
 const GLOBAL_CAP_USD = process.env.GLOBAL_CAP_USD
@@ -111,37 +117,66 @@ module.exports = async (req, res) => {
 
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
 
-  let upstream;
-  try {
-    upstream = await fetch(`${FIREWORKS_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    res.status(502).json({ error: "upstream_unreachable", message: String(e) });
-    return;
+  // 1) Try the AMD Instinct droplet first (self-hosted, ROCm/vLLM) when configured.
+  let text = null;
+  let served = "fireworks";
+  if (AMD_BASE_URL) {
+    try {
+      const amdBody = AMD_MODEL ? { ...body, model: AMD_MODEL } : body;
+      const r = await fetch(`${AMD_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(AMD_API_KEY ? { Authorization: `Bearer ${AMD_API_KEY}` } : {}),
+        },
+        body: JSON.stringify(amdBody),
+        signal: AbortSignal.timeout(35000),
+      });
+      if (r.ok) {
+        text = await r.text();
+        served = "amd";
+      }
+    } catch {
+      /* droplet down/slow → fall back to Fireworks below */
+    }
   }
 
-  const text = await upstream.text();
-  if (!upstream.ok) {
-    res.status(upstream.status).send(text);
-    return;
+  // 2) Fireworks (Gemma), the cloud tier and the fallback.
+  if (text === null) {
+    let upstream;
+    try {
+      upstream = await fetch(`${FIREWORKS_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      res.status(502).json({ error: "upstream_unreachable", message: String(e) });
+      return;
+    }
+    text = await upstream.text();
+    if (!upstream.ok) {
+      res.status(upstream.status).send(text);
+      return;
+    }
   }
 
-  // Meter by token usage from the response.
+  res.setHeader("x-jardo-served-by", served);
+  res.setHeader("x-jardo-trial-usd", String(FREE_TRIAL_USD));
+  // Meter only Fireworks usage. AMD self-hosted compute is free, so it does not
+  // burn the trial (and it's the cheaper-tier cost story).
   let remaining = FREE_TRIAL_USD - spent;
-  try {
-    const data = JSON.parse(text);
-    const tokens = data?.usage?.total_tokens || 0;
-    const cost = (tokens / 1_000_000) * USD_PER_1M_TOKENS;
-    await addSpend(device, cost);
-    remaining = Math.max(0, FREE_TRIAL_USD - (spent + cost));
-    res.setHeader("x-jardo-trial-usd", String(FREE_TRIAL_USD));
-    res.setHeader("x-jardo-trial-remaining", remaining.toFixed(4));
-  } catch {
-    /* if we can't parse usage, still return the answer */
+  if (served === "fireworks") {
+    try {
+      const tokens = JSON.parse(text)?.usage?.total_tokens || 0;
+      const cost = (tokens / 1_000_000) * USD_PER_1M_TOKENS;
+      await addSpend(device, cost);
+      remaining = Math.max(0, FREE_TRIAL_USD - (spent + cost));
+    } catch {
+      /* keep the answer even if usage is unparseable */
+    }
   }
+  res.setHeader("x-jardo-trial-remaining", remaining.toFixed(4));
   res.setHeader("Content-Type", "application/json");
   res.status(200).send(text);
 };

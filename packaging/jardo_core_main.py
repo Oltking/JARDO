@@ -22,6 +22,12 @@ def main() -> None:
     # to point at your own deployment; set it empty to disable hosted mode.
     os.environ.setdefault("JARDO_PROXY_URL", "https://jardo.vercel.app")
 
+    # Run chat on Gemma (hackathon "Best Use of Gemma"). This is a Fireworks Gemma
+    # deployment; the proxy holds the key and (when the AMD droplet is up) serves it
+    # from AMD Instinct GPUs via ROCm/vLLM, falling back to Fireworks automatically.
+    os.environ.setdefault("JARDO_GEMMA_MODEL",
+                          "accounts/olamideoladiji/deployments/p4kjg4ws")
+
     # When frozen, bundled model files (piper voice, whisper) live next to the
     # binary; expose that root so the app can resolve them.
     if getattr(sys, "frozen", False):

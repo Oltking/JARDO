@@ -396,3 +396,8 @@ section { position: relative; }
   .win--term { height: 240px; transform: none; opacity: 1; }
   .win--app { order: -1; }
 }
+
+/* live infra status pill */
+.trial__status { margin-top: 1.4rem; font-size: 0.86rem; color: var(--ink-dim); display: inline-flex; align-items: center; gap: 9px; }
+.trial__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.trial__dot.live { background: #8fd6ad; box-shadow: 0 0 0 0 rgba(143,214,173,0.6); animation: trial-pulse 2s ease-in-out infinite; }

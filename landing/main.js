@@ -305,3 +305,21 @@
     io.observe(scene);
   } else start();
 })();
+
+/* Live infra badge: show what's actually serving (AMD Instinct / Fireworks). */
+(() => {
+  "use strict";
+  const el = document.getElementById("trialStatus");
+  if (!el) return;
+  fetch("/api/status")
+    .then((r) => r.json())
+    .then((s) => {
+      const live = s.amd_online;
+      el.innerHTML =
+        `<span class="trial__dot ${live ? "live" : ""}"></span>` +
+        (live
+          ? "Serving now on AMD Instinct GPUs · ROCm · vLLM"
+          : "Serving on Fireworks AI (Gemma) · AMD ROCm tier on standby");
+    })
+    .catch(() => { el.style.display = "none"; });
+})();

@@ -226,17 +226,21 @@
           supervises. No account to make, no API key to paste, nothing to configure.
         </p>
         <p class="trial__lede">
-          When your trial runs out, drop in your own Fireworks key in Settings and
-          keep going at cost. Jardo routes every request to the cheapest capable
-          model and caches aggressively, so a little goes a long way. Prefer fully
-          local and free? Point it at Ollama.
+          Under the hood, that intelligence is <strong>Gemma</strong> served on
+          <strong>AMD Instinct GPUs</strong> with <strong>ROCm</strong> and vLLM,
+          with <strong>Fireworks AI</strong> as the instant cloud tier and automatic
+          fallback. Jardo routes every request to the cheapest capable model and
+          caches aggressively, so a little goes a long way. When your trial ends,
+          drop in your own key in Settings, or point it at Ollama for fully local.
         </p>
         <div class="trial__stack">
+          <span class="chip">Gemma</span>
+          <span class="chip">AMD Instinct · ROCm · vLLM</span>
           <span class="chip">Fireworks AI</span>
-          <span class="chip">AMD Developer Cloud</span>
           <span class="chip">Local-first STT &amp; memory</span>
           <span class="chip">Bring your own key</span>
         </div>
+        <p class="trial__status" id="trialStatus" aria-live="polite"></p>
       </div>
     </section>
 
