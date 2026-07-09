@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings";
 import { Splash } from "./components/Splash";
 import { Briefing } from "./components/Briefing";
 import { Onboarding } from "./components/Onboarding";
-import { getIdentity, killSwitch } from "./api";
+import { getIdentity, health, killSwitch } from "./api";
 
 // Secondary surfaces live behind a single "More" drawer so the main screen stays
 // what Jardo is for: talking and supervising. Nothing here is needed day-to-day.
@@ -33,14 +33,39 @@ export default function App() {
   const [panel, setPanel] = useState<Panel>("providers");
   // null = still checking; false = brand-new user (no owner); true = onboarded.
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  // The bundled core takes ~10-13s to boot on a cold start. Don't mount anything
+  // that talks to it until /healthz answers, or requests error out (the Splash is
+  // only a visual cover). Once ready, decide onboarding.
+  const [coreReady, setCoreReady] = useState(false);
 
   const onBriefingDone = useCallback(() => setBriefingDone(true), []);
 
-  // First-run gate: if there's no owner yet, show onboarding before anything else.
   useEffect(() => {
-    getIdentity()
-      .then((id) => setOnboarded(Boolean(id.name)))
-      .catch(() => setOnboarded(true)); // core not ready / error → don't block; Splash covers it
+    let alive = true;
+    (async () => {
+      const started = Date.now();
+      while (alive) {
+        try {
+          const h = await health();
+          if (h && (h as { status?: string }).status === "ok") break;
+        } catch {
+          /* core still booting */
+        }
+        if (Date.now() - started > 120_000) break; // give up after 2 min
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (!alive) return;
+      setCoreReady(true);
+      try {
+        const id = await getIdentity();
+        setOnboarded(Boolean(id.name));
+      } catch {
+        setOnboarded(false); // core up but couldn't read identity → run onboarding
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -69,6 +94,8 @@ export default function App() {
   return (
     <div className="app">
       <Splash />
+      {coreReady && (
+        <>
       {onboarded === false && <Onboarding onDone={() => setOnboarded(true)} />}
       {onboarded === true && !briefingDone && <Briefing onDone={onBriefingDone} />}
 
@@ -130,6 +157,8 @@ export default function App() {
             </div>
           </aside>
         </div>
+      )}
+        </>
       )}
     </div>
   );
