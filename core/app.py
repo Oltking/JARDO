@@ -391,6 +391,13 @@ async def reset_account() -> dict:
         except Exception:  # noqa: BLE001 — a missing secret is fine
             pass
 
+    # Clear non-secret device preferences (language, projects root, terminal
+    # choice, learned allow-list) so the wipe truly returns to a new-user state.
+    try:
+        (Path.home() / ".jardo" / "settings.json").unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+
     # Forget the anonymous trial device id so a fresh one is minted next call.
     try:
         (Path.home() / ".jardo" / "device_id").unlink(missing_ok=True)
@@ -628,17 +635,24 @@ async def voice_status() -> dict:
     selected = await run_in_threadpool(mic.pick_builtin_mic)
     # Warm the STT model in the background so the first spoken turn isn't slow
     # (the model-load cost is paid now, while the app is just opening). On a fresh
-    # install this also DOWNLOADS the model (~180 MB) once — we flag that so the UI
-    # can show a one-time "setting up voice" state without blocking chat.
-    if not hasattr(app.state, "stt"):
+    # install this also DOWNLOADS the model once — we flag that so the UI can show a
+    # one-time "setting up voice" state without blocking chat. This is LANGUAGE-aware:
+    # a non-English user needs the multilingual model warmed, not the English one, or
+    # transcribe would sit at model_pending forever without ever fetching it.
+    from core import i18n
+    lang = i18n.current()
+    stt = _get_stt(lang)
+    warmed = getattr(app.state, "warmed_langs", None)
+    if warmed is None:
+        warmed = app.state.warmed_langs = set()
+    if lang not in warmed:
         import threading
-        from core.voice.stt import SpeechToText
-        app.state.stt = SpeechToText(settings.voice_stt_model)
-        app.state.voice_downloading = not app.state.stt.is_ready()
+        warmed.add(lang)
+        app.state.voice_downloading = not stt.is_ready()
 
-        def _warm():
+        def _warm(s=stt):
             try:
-                app.state.stt.warmup()
+                s.warmup()
             finally:
                 app.state.voice_downloading = False
 
@@ -649,7 +663,7 @@ async def voice_status() -> dict:
     )
     return {
         "available": True,
-        "model_ready": app.state.stt.is_ready(),
+        "model_ready": stt.is_ready(),
         "model_downloading": bool(getattr(app.state, "voice_downloading", False)),
         "tts_backend": settings.voice_tts_backend,
         "tts_voice": voice_label,
