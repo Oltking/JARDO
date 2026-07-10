@@ -90,14 +90,30 @@ class TerminalApp(TerminalDriver):
         except RuntimeError:
             return True  # couldn't tell (transient) — don't kill supervision on a blip
 
+    def _press_return(self) -> None:
+        # A real Enter key event. `do script` only writes a line feed to the tty,
+        # which shells accept as "run" but full-screen TUIs (Claude Code, Gemini)
+        # treat as a newline INSIDE the input box — they only submit on a genuine
+        # Return keypress. Best-effort: if Accessibility isn't granted this is a
+        # no-op (the typed text still sits there for the owner to send).
+        try:
+            _osa('tell application "Terminal" to activate',
+                 'tell application "System Events" to key code 36')
+        except RuntimeError as exc:
+            import logging
+            logging.getLogger("jardo.terminal").info(
+                "couldn't press Return (Accessibility?): %s", exc)
+
     def send_keys(self, text: str, submit: bool, window_id=None) -> None:
         # Preferred: Terminal's own Apple Events (Automation) — types into the
-        # session's stdin, no Accessibility, no focus theft. `do script` always
-        # appends a return, which is what we want for `submit`; for a bare
-        # numbered keypress the trailing return is harmless.
+        # session's stdin, no Accessibility, no focus theft. For a bare numbered
+        # keypress the digit is enough; for submitted text we must follow with a
+        # real Return so TUIs (which ignore a piped newline) actually send it.
         try:
             _osa(f'tell application "Terminal" to do script "{_esc(text)}" '
                  f'in {self._target(window_id)}')
+            if submit:
+                self._press_return()
             return
         except RuntimeError as exc:
             # Fall back to synthetic keystrokes (needs Accessibility). Log why the
