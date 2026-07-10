@@ -750,7 +750,57 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Move the app to /Applications if it's being run straight from the mounted
+/// DMG (or any read-only volume). macOS "translocates" apps launched from a
+/// disk image to a random read-only path and nags the user to eject it. Beta
+/// users shouldn't have to know to drag the icon across first: if we detect we
+/// booted from /Volumes, we copy ourselves into /Applications, relaunch from
+/// there, and quit the mounted copy. Best-effort — any failure just falls
+/// through and the app keeps running from where it is.
+fn relocate_from_dmg_if_needed() {
+    let exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    // Only act when we're inside a mounted volume (the DMG), not a normal install.
+    if !exe.starts_with("/Volumes/") {
+        return;
+    }
+    // Walk up from .../Jardo.app/Contents/MacOS/Jardo to the .app bundle.
+    let bundle = exe
+        .ancestors()
+        .find(|p| p.extension().map(|e| e == "app").unwrap_or(false));
+    let bundle = match bundle {
+        Some(p) => p.to_path_buf(),
+        None => return,
+    };
+    let name = match bundle.file_name() {
+        Some(n) => n,
+        None => return,
+    };
+    let dest = std::path::Path::new("/Applications").join(name);
+
+    // If a copy already exists in /Applications, just launch that one instead of
+    // clobbering it, so we don't overwrite an install the user is mid-using.
+    if !dest.exists() {
+        let status = std::process::Command::new("/bin/cp")
+            .arg("-R")
+            .arg(&bundle)
+            .arg("/Applications/")
+            .status();
+        match status {
+            Ok(s) if s.success() => {}
+            _ => return, // couldn't copy (perms, space) → keep running from the DMG
+        }
+    }
+
+    // Relaunch the /Applications copy, then exit this translocated instance.
+    let _ = std::process::Command::new("/usr/bin/open").arg(&dest).spawn();
+    std::process::exit(0);
+}
+
 pub fn run() {
+    relocate_from_dmg_if_needed();
     let app = tauri::Builder::default()
         .plugin(
             // Global-shortcut plugin init (plugin-global-shortcut.md). The

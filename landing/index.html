@@ -334,8 +334,11 @@
           <span class="btn btn--disabled btn--lg">Windows, coming soon</span>
         </div>
         <p class="download__fine">
-          Unsigned early build: after downloading, <strong>right-click → Open</strong> to get past Gatekeeper.
-          Use the included trial compute first; adding your own model key in Settings is optional.
+          Unsigned early build. After downloading, <strong>right-click Jardo → Open</strong> to get past Gatekeeper.
+          If macOS says it is "damaged," that is just the browser quarantine flag on an unsigned app, not a real problem.
+          Clear it once in Terminal with
+          <code>xattr -dr com.apple.quarantine ~/Downloads/Jardo_0.1.0_aarch64.dmg</code>,
+          then open it. Use the included trial compute first; adding your own model key in Settings is optional.
         </p>
       </div>
     </section>
