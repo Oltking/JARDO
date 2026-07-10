@@ -344,6 +344,14 @@ async fn set_identity(
 }
 
 #[tauri::command]
+async fn reset_account() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/settings/reset", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn get_projects() -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .get(format!("{}/projects", core_base()))
@@ -825,6 +833,7 @@ pub fn run() {
             set_provider,
             get_identity,
             set_identity,
+            reset_account,
             get_projects,
             get_projects_root,
             set_projects_root,

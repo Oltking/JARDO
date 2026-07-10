@@ -318,6 +318,37 @@ async def set_identity(body: IdentityRequest,
     return {"name": owner.name, "pronoun_style": owner.pronoun_style}
 
 
+@app.post("/settings/reset")
+async def reset_account() -> dict:
+    """Wipe this device's profile and memory (owner, conversations, memories,
+    projects, approvals, audit). For the in-app "delete my data" control: a user
+    on their own Mac can start over as if newly installed. Drops and recreates
+    every table, clears Keychain secrets, and forgets the anonymous device id."""
+    from pathlib import Path
+
+    from core import db, secrets
+
+    import core.schema  # noqa: F401 — register models on Base
+    async with db.engine.begin() as conn:
+        await conn.run_sync(db.Base.metadata.drop_all)
+        await conn.run_sync(db.Base.metadata.create_all)
+
+    # Secrets live only in the Keychain, never in files — clear them too.
+    for svc in (secrets.FIREWORKS_API_KEY, secrets.AMD_API_KEY,
+                secrets.DEVICE_PRIVATE_KEY, secrets.TOTP_SECRET):
+        try:
+            secrets.delete_secret(svc)
+        except Exception:  # noqa: BLE001 — a missing secret is fine
+            pass
+
+    # Forget the anonymous trial device id so a fresh one is minted next call.
+    try:
+        (Path.home() / ".jardo" / "device_id").unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+    return {"ok": True}
+
+
 # ---- Projects (spec §4.5) — "where am I?" resume-work. The owner picks a folder
 # (or Jardo lists their projects root); Jardo answers from the agent's own memory
 # + git, never by re-reading the codebase.

@@ -176,6 +176,15 @@ export async function setIdentity(
   }
 }
 
+// Wipe this device's profile + memory (delete-my-data). Returns to first-run.
+export async function resetAccount(): Promise<void> {
+  try {
+    await invoke("reset_account");
+  } catch (e) {
+    throw toApiError(e);
+  }
+}
+
 export interface WhereAmI {
   needs_folder?: boolean;
   found?: boolean;

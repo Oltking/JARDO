@@ -10,7 +10,7 @@ import { Settings } from "./components/Settings";
 import { Splash } from "./components/Splash";
 import { Briefing } from "./components/Briefing";
 import { Onboarding } from "./components/Onboarding";
-import { getIdentity, health, killSwitch } from "./api";
+import { getIdentity, health, killSwitch, resetAccount } from "./api";
 
 // Secondary surfaces live behind a single "More" drawer so the main screen stays
 // what Jardo is for: talking and supervising. Nothing here is needed day-to-day.
@@ -38,7 +38,32 @@ export default function App() {
   // only a visual cover). Once ready, decide onboarding.
   const [coreReady, setCoreReady] = useState(false);
 
+  const [wiping, setWiping] = useState(false);
+
   const onBriefingDone = useCallback(() => setBriefingDone(true), []);
+
+  // Delete-my-data: wipe profile + memory on this Mac and drop straight back to
+  // first-run onboarding, as if freshly installed. Confirmed before it runs.
+  const onWipe = useCallback(async () => {
+    const ok = window.confirm(
+      "Delete your profile and everything Jardo remembers on this Mac? " +
+        "This clears your name, conversations, memory, saved keys, and trial id. " +
+        "It cannot be undone."
+    );
+    if (!ok) return;
+    setWiping(true);
+    try {
+      await resetAccount();
+      // Back to a clean first-run without needing a restart.
+      setBriefingDone(false);
+      setDrawer(false);
+      setOnboarded(false);
+    } catch {
+      window.alert("Couldn't delete your data. Please try again.");
+    } finally {
+      setWiping(false);
+    }
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -154,6 +179,14 @@ export default function App() {
               {panel === "approvals" && <Approvals />}
               {panel === "activity" && <Agents />}
               {panel === "reports" && <Reports />}
+            </div>
+            <div className="drawer-danger">
+              <button className="wipe-btn" onClick={onWipe} disabled={wiping}>
+                {wiping ? "Deleting…" : "Delete my profile & memory"}
+              </button>
+              <p className="wipe-note">
+                Erases everything Jardo knows about you on this Mac and starts over.
+              </p>
             </div>
           </aside>
         </div>

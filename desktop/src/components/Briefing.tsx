@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getBriefing,
   setObjective,
@@ -18,26 +18,42 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
   const [confirmed, setConfirmed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const spokenRef = useRef(false);
+  // Once we've handed off (skip or a set goal), any in-flight voice capture must
+  // not also fire — otherwise the briefing keeps listening after Skip and you get
+  // two responders talking over each other in the chat.
+  const doneRef = useRef(false);
+
+  const finish = useCallback(
+    (g?: string) => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      onDone(g);
+    },
+    [onDone]
+  );
 
   // Auto-listen for the day's goal (10s silence timeout). On hearing an answer,
   // Jardo confirms it out loud before proceeding; on silence/misheard, it says so
   // and leaves the manual input available (never a silent jump).
   async function autoListenForGoal() {
-    if (listening || busy) return;
+    if (listening || busy || doneRef.current) return;
     setListening(true);
     try {
       const heard = await voiceTranscribe(6);
+      if (doneRef.current) return; // skipped/submitted while we were recording
       const g = (heard.transcript || "").trim();
       if (heard.heard && g.length >= 3) {
         setGoal(g);
         setConfirmed(g);
         await setObjective(g);
         try {
-          await voiceSay(`Got it. I'll help you with ${g}. Let's get started.`);
+          // Don't parrot the raw sentence back ("I'll help you with I want to
+          // achieve a project"); a short, natural acknowledgement reads better.
+          await voiceSay("Got it. Let's get started.");
         } catch {
           /* no voice — the visual confirmation still shows */
         }
-        onDone(g);
+        finish(g);
       } else {
         try {
           await voiceSay("I didn't catch that. You can say it again, or type it below.");
@@ -74,13 +90,13 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
   async function submit() {
     const g = goal.trim();
     if (!g) {
-      onDone();
+      finish();
       return;
     }
     setBusy(true);
     try {
       await setObjective(g);
-      onDone(g);
+      finish(g);
     } catch (e) {
       setError((e as ApiError).message);
       setBusy(false);
@@ -144,7 +160,7 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
               </button>
             </div>
 
-            <button className="briefing-skip" onClick={() => onDone()}>
+            <button className="briefing-skip" onClick={() => finish()}>
               Skip for now
             </button>
           </>

@@ -207,6 +207,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
+  // True while an utterance (typed or spoken) is being handled. The always-on mic
+  // loop checks this before dispatching, so typing in the chat doesn't get a
+  // second answer from a voice capture that overlapped it (no two responders).
+  const busyRef = useRef(false);
   const nameRef = useRef<string | null>(null);
 
   function say(who: Line["who"], text: string, ok?: boolean) {
@@ -298,7 +302,19 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   }, []);
 
   // ---- one place every utterance flows through, voice or typed --------------
+  // Wrapper: mark "busy" for the entire turn so the mic loop won't fire a second
+  // response over a typed one. The real logic lives in handleUtterance.
   async function handle(text: string, spoken: boolean) {
+    if (!text.trim()) return;
+    busyRef.current = true;
+    try {
+      await handleUtterance(text, spoken);
+    } finally {
+      busyRef.current = false;
+    }
+  }
+
+  async function handleUtterance(text: string, spoken: boolean) {
     const raw = text.trim();
     if (!raw) return;
     say("you", raw); // immediate echo — stays responsive
@@ -503,8 +519,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         silentStreak = 0;
         setError(null);
         // Drop anything captured while (or just after) Jardo was speaking — that's
-        // Jardo hearing itself, not the owner.
-        if (speakingRef.current || Date.now() < suppressUntilRef.current) continue;
+        // Jardo hearing itself, not the owner. Also skip if a turn is already being
+        // handled (e.g. the owner just typed) so we never get two responders.
+        if (speakingRef.current || busyRef.current || Date.now() < suppressUntilRef.current)
+          continue;
         await handle(heard.transcript, true);
       }
     } catch (e) {
