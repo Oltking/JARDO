@@ -184,6 +184,25 @@ export interface LanguageOption {
   native: string;
 }
 
+export interface InfraStatus {
+  hosted: boolean;
+  own_key: boolean;
+  backend: "amd" | "fireworks" | "local";
+  accelerator: string | null;
+  model: string | null;
+  trial_remaining: number | null;
+  trial_usd: number | null;
+  metered: boolean;
+}
+
+export async function infraStatus(): Promise<InfraStatus | null> {
+  try {
+    return await invoke<InfraStatus>("infra_status");
+  } catch {
+    return null;
+  }
+}
+
 export async function getLanguages(): Promise<{ languages: LanguageOption[]; current: string }> {
   try {
     return await invoke("i18n_languages");

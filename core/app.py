@@ -311,7 +311,8 @@ async def set_identity(body: IdentityRequest,
 
         from core.identity import create_owner
         name = body.name.strip()[:120]
-        pronoun = body.pronoun_style if body.pronoun_style in ("sir", "ma") else "sir"
+        pronoun = (body.pronoun_style
+                   if body.pronoun_style in ("sir", "ma", "neutral") else "sir")
         slug = re.sub(r"[^a-z0-9]+", "", name.lower()) or "owner"
         email = (body.email or "").strip() or f"{slug}@jardo.local"
         owner = await create_owner(session, name, pronoun, email)
@@ -321,7 +322,7 @@ async def set_identity(body: IdentityRequest,
                 "language": i18n.current()}
     if body.name and body.name.strip():
         owner.name = body.name.strip()[:120]
-    if body.pronoun_style in ("sir", "ma"):
+    if body.pronoun_style in ("sir", "ma", "neutral"):
         owner.pronoun_style = body.pronoun_style
     await session.commit()
     return {"name": owner.name, "pronoun_style": owner.pronoun_style,
@@ -371,6 +372,40 @@ async def i18n_translate(body: TranslateRequest) -> dict:
     else:
         out = await i18n.translate(body.text, target, _model_chat)
     return {"text": out, "language": target}
+
+
+@app.get("/infra/status")
+async def infra_status() -> dict:
+    """What's actually serving inference right now + trial remaining, so the app can
+    show 'AMD Gemma · free' vs 'Fireworks' vs 'local' and the trial meter. Best-
+    effort and fast — never blocks the UI."""
+    from core.inference import providers
+
+    own_key = providers.has_key("fireworks") or providers.has_key("amd")
+    hosted = providers.is_hosted("fireworks")
+    out = {"hosted": hosted, "own_key": own_key, "backend": "local",
+           "accelerator": None, "model": None,
+           "trial_remaining": None, "trial_usd": None, "metered": False}
+    if hosted:
+        import httpx
+        base = providers.hosted_url().rstrip("/")
+        dev = providers.device_id()
+        try:
+            async with httpx.AsyncClient(timeout=4) as c:
+                s = (await c.get(f"{base}/api/status")).json()
+                out["backend"] = s.get("backend", "fireworks")
+                out["accelerator"] = s.get("accelerator")
+                out["model"] = s.get("model")
+                u = (await c.get(f"{base}/api/usage", params={"device": dev})).json()
+                out["trial_remaining"] = u.get("remaining_usd")
+                out["trial_usd"] = u.get("trial_usd")
+                # AMD is free; only Fireworks spends the trial.
+                out["metered"] = out["backend"] != "amd"
+        except Exception:  # noqa: BLE001 — status is best-effort
+            out["backend"] = "fireworks"
+    elif own_key:
+        out["backend"] = "fireworks"
+    return out
 
 
 @app.post("/settings/reset")
@@ -1502,6 +1537,8 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
             reply = ("You've used up the free trial. To keep going, add your own "
                      "Fireworks API key in Settings, or point me at a local Ollama "
                      "model for free.")
+            if _lang != "en":  # deliver the message in the user's language
+                reply = await i18n.translate(reply, _lang, _model_chat)
             await store.add_message(conversation.id, "assistant", reply)
             await session.commit()
             return ChatResponse(reply=reply, conversation_id=conversation.id,

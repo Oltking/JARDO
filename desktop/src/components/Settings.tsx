@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import {
   getIdentity,
   getLanguages,
+  infraStatus,
+  type InfraStatus,
   getProviders,
   getProjectsRoot,
   getTerminalChoice,
@@ -27,6 +29,7 @@ export function Settings() {
   const [urlDraft, setUrlDraft] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
   const [pronoun, setPronoun] = useState("sir");
+  const [infra, setInfra] = useState<InfraStatus | null>(null);
   const [language, setLanguage] = useState("en");
   const [languages, setLanguages] = useState<LanguageOption[]>([
     { code: "en", name: "English", native: "English" },
@@ -93,6 +96,7 @@ export function Settings() {
     getLanguages()
       .then((r) => r.languages.length && setLanguages(r.languages))
       .catch(() => undefined);
+    infraStatus().then((s) => s && setInfra(s)).catch(() => undefined);
     getProjectsRoot()
       .then((r) => setRoot(r.root))
       .catch(() => undefined);
@@ -126,6 +130,30 @@ export function Settings() {
         <div className="banner error" role="alert">
           {error}
         </div>
+      )}
+
+      {infra && (
+        <>
+          <h2>Compute</h2>
+          <div className="compute-status">
+            <span className={`serving-badge ${infra.backend}`}>
+              {infra.backend === "amd"
+                ? "⚡ AMD Gemma"
+                : infra.backend === "fireworks"
+                ? "Fireworks AI"
+                : "Local model"}
+            </span>
+            <span className="settings-hint" style={{ margin: 0 }}>
+              {infra.backend === "amd"
+                ? `Running on ${infra.accelerator || "AMD Instinct GPU"} — free, doesn't touch your trial.`
+                : infra.own_key
+                ? "Using your own key."
+                : infra.trial_remaining != null
+                ? `Free trial: $${infra.trial_remaining.toFixed(2)} of $${(infra.trial_usd ?? 1).toFixed(2)} left.`
+                : "On the free trial."}
+            </span>
+          </div>
+        </>
       )}
 
       <h2>You</h2>

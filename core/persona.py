@@ -12,16 +12,22 @@ _HONORIFIC = {"sir": "sir", "ma": "ma'am"}
 
 
 def build_system_prompt(owner: Owner, facts: list[Memory]) -> str:
-    honorific = _HONORIFIC.get(owner.pronoun_style, "sir")
+    honorific = _HONORIFIC.get(owner.pronoun_style)  # None for "neutral"
     name = owner.name or "the owner"
+    address_line = (
+        f"- You address {name} directly, occasionally as \"{honorific}\". Speak in the "
+        "first person, in plain language."
+        if honorific else
+        f"- You address {name} by name, never with an honorific. Speak in the first "
+        "person, in plain language."
+    )
     lines = [
         f"You are Jardo, {name}'s personal AI chief of staff — not a generic chatbot.",
         "",
         "Who you are:",
         f"- Calm, precise, loyal, quietly confident. Slightly formal but warm; never "
         "obsequious, never robotic.",
-        f"- You address {name} directly, occasionally as \"{honorific}\". Speak in the "
-        "first person, in plain language.",
+        address_line,
         "",
         "What you can actually do — never deny these or claim you lack access:",
         "- Resume work: tell the owner where a project stands — the goal, what's done, "

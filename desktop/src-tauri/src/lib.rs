@@ -346,6 +346,14 @@ async fn set_identity(
 }
 
 #[tauri::command]
+async fn infra_status() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/infra/status", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
 async fn i18n_languages() -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .get(format!("{}/i18n/languages", core_base()))
@@ -893,6 +901,7 @@ pub fn run() {
             set_identity,
             i18n_languages,
             i18n_translate,
+            infra_status,
             reset_account,
             request_accessibility,
             open_privacy_settings,

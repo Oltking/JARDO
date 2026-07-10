@@ -37,12 +37,35 @@ export default function App() {
   // that talks to it until /healthz answers, or requests error out (the Splash is
   // only a visual cover). Once ready, decide onboarding.
   const [coreReady, setCoreReady] = useState(false);
+  const [coreDown, setCoreDown] = useState(false); // core became unreachable mid-session
 
   const [wiping, setWiping] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [wipeError, setWipeError] = useState<string | null>(null);
 
   const onBriefingDone = useCallback(() => setBriefingDone(true), []);
+
+  // Once the core is up, watch it: if it dies mid-session (crash, sleep/wake),
+  // surface a clear reconnecting bar instead of a wall of per-request errors.
+  useEffect(() => {
+    if (!coreReady) return;
+    let alive = true;
+    let misses = 0;
+    const t = window.setInterval(async () => {
+      try {
+        const h = await health();
+        if (!alive) return;
+        misses = h && (h as { status?: string }).status === "ok" ? 0 : misses + 1;
+      } catch {
+        misses += 1;
+      }
+      if (alive) setCoreDown(misses >= 2); // two strikes → show the bar
+    }, 8000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [coreReady]);
 
   // Delete-my-data: wipe profile + memory on this Mac and drop straight back to
   // first-run onboarding, as if freshly installed. Confirmed in an in-app modal —
@@ -129,13 +152,14 @@ export default function App() {
           <span className="brand-name">Jardo</span>
         </div>
         <div className="topbar-actions">
-          <button className="more-btn" onClick={() => setDrawer(true)}>
+          <button className="more-btn" onClick={() => setDrawer(true)} aria-label="Open menu">
             ⋯
           </button>
           <button
             className={`kill-btn ${killFlash ? "flash" : ""}`}
             onClick={onKillClick}
             title="Kill-switch  ⌘⇧⎋"
+            aria-label="Kill-switch: stop all listening and supervision"
           >
             ⏻ Stop
           </button>
@@ -145,6 +169,14 @@ export default function App() {
       {killFlash && (
         <div className="kill-banner" role="alert">
           KILL-SWITCH engaged — listening and terminal supervision halted.
+        </div>
+      )}
+
+      {coreDown && (
+        <div className="reconnect-bar" role="status">
+          <span className="dl-spinner" aria-hidden="true" />
+          Lost contact with the engine — reconnecting… If this persists, quit and
+          reopen Jardo.
         </div>
       )}
 

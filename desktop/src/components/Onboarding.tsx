@@ -12,12 +12,12 @@ import { HalftoneAvatar } from "./HalftoneAvatar";
 // so everything setup used to need (`jardo setup`) happens here: create the owner
 // identity, then optionally add a model key. Voice model + mic permission warm up
 // on their own after this. Shows only when there's no owner yet.
-type Step = "name" | "key" | "done";
+type Step = "name" | "permissions" | "key" | "done";
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
-  const [pronoun, setPronoun] = useState<"sir" | "ma">("sir");
+  const [pronoun, setPronoun] = useState<"sir" | "ma" | "neutral">("sir");
   const [language, setLanguage] = useState("en");
   const [languages, setLanguages] = useState<LanguageOption[]>([
     { code: "en", name: "English", native: "English" },
@@ -42,7 +42,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     setError(null);
     try {
       await setIdentity(n, pronoun, language);
-      setStep("key");
+      setStep("permissions");
     } catch (e) {
       setError((e as ApiError).message || "Couldn't save that.");
     } finally {
@@ -90,13 +90,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             <div className="onboard-pronoun">
               <span>Address you as</span>
               <div className="onboard-toggle">
-                {(["sir", "ma"] as const).map((p) => (
+                {(["sir", "ma", "neutral"] as const).map((p) => (
                   <button
                     key={p}
                     className={pronoun === p ? "active" : ""}
                     onClick={() => setPronoun(p)}
                   >
-                    {p === "sir" ? "Sir" : "Ma"}
+                    {p === "sir" ? "Sir" : p === "ma" ? "Ma" : "Just my name"}
                   </button>
                 ))}
               </div>
@@ -129,6 +129,45 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           </>
         )}
 
+        {step === "permissions" && (
+          <>
+            <h1 className="onboard-title">A couple of macOS permissions.</h1>
+            <p className="onboard-sub">
+              So nothing surprises you later, here's what I'll ask for — and when.
+              You grant each with one click when it comes up.
+            </p>
+            <ul className="onboard-perms">
+              <li>
+                <span className="onboard-perm-icon">🎙️</span>
+                <span>
+                  <strong>Microphone</strong> — the first time I listen, so we can
+                  talk. Asked right after this.
+                </span>
+              </li>
+              <li>
+                <span className="onboard-perm-icon">⌨️</span>
+                <span>
+                  <strong>Accessibility &amp; Terminal control</strong> — only when
+                  you first ask me to <em>supervise</em> a coding agent, so I can
+                  read the terminal and press the answers.
+                </span>
+              </li>
+            </ul>
+            <p className="onboard-hint">
+              I never act without you seeing it, and there's always a kill-switch
+              (⌘⇧⎋).
+            </p>
+            <div className="onboard-actions">
+              <button className="onboard-ghost" onClick={() => setStep("name")}>
+                Back
+              </button>
+              <button className="onboard-primary" onClick={() => setStep("key")}>
+                Got it
+              </button>
+            </div>
+          </>
+        )}
+
         {step === "key" && (
           <>
             <h1 className="onboard-title">You're set — the first $1 is on me.</h1>
@@ -155,6 +194,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             </p>
             {error && <p className="onboard-error">{error}</p>}
             <div className="onboard-actions">
+              <button
+                className="onboard-ghost"
+                disabled={busy}
+                onClick={() => setStep("permissions")}
+              >
+                Back
+              </button>
               <button
                 className="onboard-ghost"
                 disabled={busy}

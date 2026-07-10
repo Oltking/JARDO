@@ -5,6 +5,8 @@ import {
   chooseProject,
   getIdentity,
   getProviders,
+  infraStatus,
+  type InfraStatus,
   localize,
   toEnglish,
   openPrivacySettings,
@@ -200,6 +202,8 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const [needsAccess, setNeedsAccess] = useState(false);
   const [micPaused, setMicPaused] = useState(false); // pause the always-on mic
   const [noKey, setNoKey] = useState(false); // first-run: no model key configured
+  const [infra, setInfra] = useState<InfraStatus | null>(null); // what's serving
+  const [coachOpen, setCoachOpen] = useState(false); // one-time supervise explainer
   const [intake, setIntake] = useState<Intake | null>(null); // new-project form
 
   const runningRef = useRef(false);
@@ -288,6 +292,27 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     return () => {
       runningRef.current = false;
       window.clearInterval(poll);
+    };
+  }, []);
+
+  // One-time coach card the first time supervision starts, so a new user knows
+  // what Jardo is about to do in their terminal (and that macOS may prompt).
+  useEffect(() => {
+    if (supervising && !localStorage.getItem("jardo_supervise_coached")) {
+      localStorage.setItem("jardo_supervise_coached", "1");
+      setCoachOpen(true);
+    }
+  }, [supervising]);
+
+  // Live "what's serving" badge (AMD Gemma / Fireworks / local) + trial meter.
+  useEffect(() => {
+    let alive = true;
+    const tick = () => infraStatus().then((s) => alive && s && setInfra(s)).catch(() => undefined);
+    tick();
+    const t = window.setInterval(tick, 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
     };
   }, []);
 
@@ -862,6 +887,29 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         </div>
       )}
 
+      {coachOpen && (
+        <div className="confirm-scrim" onClick={() => setCoachOpen(false)}>
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <h2>I'm supervising now</h2>
+            <p>
+              I'll watch your terminal and answer the agent's permission prompts
+              against your goal — approving safe, on-task steps, declining risky
+              ones, and nudging it back if it drifts. You see every decision here.
+            </p>
+            <p>
+              macOS may ask to let me control <strong>Terminal</strong> and use
+              <strong> Accessibility</strong> — allow it so I can press the answers.
+              Stop me anytime with the kill-switch (<strong>⌘⇧⎋</strong>).
+            </p>
+            <div className="confirm-actions">
+              <button className="btn-primary" onClick={() => setCoachOpen(false)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {intake && (
         <div className="intake-backdrop" onClick={() => setIntake(null)}>
           <div
@@ -1008,7 +1056,13 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         </div>
       )}
 
-      <div className={`stream ${lines.length > 0 ? "has-messages" : "is-empty"}`} ref={scrollRef}>
+      <div
+        className={`stream ${lines.length > 0 ? "has-messages" : "is-empty"}`}
+        ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Conversation with Jardo"
+      >
         {lines.length === 0 ? (
           <div className="welcome-screen">
             <div className="welcome">
@@ -1048,11 +1102,34 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         <span className="live-label">
           {micPaused ? "mic paused" : phaseLabel[phase]}
         </span>
+        {infra && (
+          <span
+            className={`serving-badge ${infra.backend}`}
+            title={
+              infra.backend === "amd"
+                ? `Running on ${infra.accelerator || "AMD Instinct GPU"} — free`
+                : infra.backend === "fireworks"
+                ? infra.own_key
+                  ? "Running on Fireworks AI (your key)"
+                  : `Fireworks AI${infra.trial_remaining != null ? ` · $${infra.trial_remaining.toFixed(2)} trial left` : ""}`
+                : "Running on a local model"
+            }
+          >
+            {infra.backend === "amd"
+              ? "⚡ AMD Gemma · free"
+              : infra.backend === "fireworks"
+              ? infra.own_key
+                ? "Fireworks"
+                : `Fireworks · $${(infra.trial_remaining ?? 0).toFixed(2)}`
+              : "local"}
+          </span>
+        )}
         {status?.available && (
           <button
             className={`mic-toggle ${micPaused ? "paused" : ""}`}
             onClick={toggleMic}
             title={micPaused ? "Resume listening" : "Pause listening"}
+            aria-label={micPaused ? "Resume listening" : "Pause listening"}
           >
             {micPaused ? "🔇" : "🎙"}
           </button>
@@ -1063,6 +1140,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           rows={1}
+          aria-label="Type a message to Jardo"
         />
         <button
           onClick={() => {
@@ -1071,6 +1149,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
             void submitTyped(t);
           }}
           disabled={!input.trim()}
+          aria-label="Send message"
         >
           Send
         </button>
