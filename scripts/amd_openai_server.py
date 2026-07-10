@@ -34,30 +34,64 @@ async def models(request: Request):
     _auth(request)
     return {"object": "list", "data": [{"id": SERVED, "object": "model"}]}
 
+def _normalize_messages(raw):
+    """Flatten content, and fold any system message into the first user turn.
+    Gemma's chat template rejects a 'system' role outright — and Jardo's
+    supervisor/observer calls DO send system prompts — so without this every
+    supervision request 500s. This keeps the instruction while satisfying Gemma."""
+    msgs, system = [], ""
+    for m in raw:
+        c = m.get("content", "")
+        if isinstance(c, list):  # multimodal → keep the text parts
+            c = " ".join(p.get("text", "") for p in c
+                         if isinstance(p, dict) and p.get("type") == "text")
+        role = m.get("role", "user")
+        if role == "system":
+            system += (c + "\n\n")
+            continue
+        msgs.append({"role": role, "content": c})
+    if system:
+        for m in msgs:
+            if m["role"] == "user":
+                m["content"] = system + m["content"]
+                break
+        else:
+            msgs.insert(0, {"role": "user", "content": system.strip()})
+    return msgs or [{"role": "user", "content": ""}]
+
+
 @app.post("/v1/chat/completions")
 async def chat(request: Request):
     _auth(request)
-    body = await request.json()
-    max_new = int(body.get("max_tokens", 512) or 512)
-    temp = float(body.get("temperature", 0.7) or 0.0)
-    msgs = []
-    for m in body.get("messages", []):
-        c = m.get("content", "")
-        if isinstance(c, list):  # multimodal → take the text parts
-            c = " ".join(p.get("text", "") for p in c if isinstance(p, dict) and p.get("type") == "text")
-        msgs.append({"role": m.get("role", "user"), "content": c})
-    inputs = tok.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt").to(model.device)
-    prompt_tokens = int(inputs.shape[-1])
-    with torch.no_grad():
-        out = model.generate(inputs, max_new_tokens=max_new,
-                             do_sample=temp > 0, temperature=max(temp, 0.01))
-    gen = out[0][prompt_tokens:]
-    text = tok.decode(gen, skip_special_tokens=True).strip()
-    return {
-        "id": "chatcmpl-" + uuid.uuid4().hex[:24], "object": "chat.completion",
-        "created": int(time.time()), "model": SERVED,
-        "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
-                     "finish_reason": "stop"}],
-        "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": int(gen.shape[-1]),
-                  "total_tokens": prompt_tokens + int(gen.shape[-1])},
-    }
+    try:
+        body = await request.json()
+        max_new = int(body.get("max_tokens", 512) or 512)
+        temp = float(body.get("temperature", 0.7) or 0.0)
+        msgs = _normalize_messages(body.get("messages", []))
+        # device_map="auto" means model.device can be unreliable — use a real
+        # parameter's device. return_dict gives us the attention mask too.
+        dev = next(model.parameters()).device
+        enc = tok.apply_chat_template(msgs, add_generation_prompt=True,
+                                      return_tensors="pt", return_dict=True)
+        enc = {k: v.to(dev) for k, v in enc.items()}
+        prompt_tokens = int(enc["input_ids"].shape[-1])
+        with torch.no_grad():
+            out = model.generate(**enc, max_new_tokens=max_new,
+                                 do_sample=temp > 0,
+                                 temperature=max(temp, 0.01) if temp > 0 else None,
+                                 pad_token_id=tok.eos_token_id)
+        gen = out[0][prompt_tokens:]
+        text = tok.decode(gen, skip_special_tokens=True).strip()
+        return {
+            "id": "chatcmpl-" + uuid.uuid4().hex[:24], "object": "chat.completion",
+            "created": int(time.time()), "model": SERVED,
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
+                         "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": prompt_tokens,
+                      "completion_tokens": int(gen.shape[-1]),
+                      "total_tokens": prompt_tokens + int(gen.shape[-1])},
+        }
+    except Exception as exc:  # surface the real reason instead of a bare 500
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"generation failed: {type(exc).__name__}: {exc}")
