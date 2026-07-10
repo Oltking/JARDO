@@ -291,6 +291,17 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     };
   }, []);
 
+  // Live language switch from Settings: update the language and warm the new voice
+  // model (a fresh voiceStatus call triggers the backend to load/download it).
+  useEffect(() => {
+    const onLang = (e: Event) => {
+      langRef.current = (e as CustomEvent).detail || "en";
+      voiceStatus().then(setStatus).catch(() => undefined);
+    };
+    window.addEventListener("jardo-language", onLang);
+    return () => window.removeEventListener("jardo-language", onLang);
+  }, []);
+
   // Always-on: start listening as soon as the app is up (unless paused).
   useEffect(() => {
     if (autoStart && !micPaused && status?.available && !runningRef.current) listenLoop();
@@ -469,7 +480,13 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       const reply = await sendChat(msg, convRef.current);
       convRef.current = reply.conversation_id;
       setNeedsSetup(false);
-      await jardoSay(reply.reply, spoken); // localized bubble + voice
+      // The chat model already replied in the user's language (system directive),
+      // so display + speak directly — no extra translation round-trip.
+      say("jardo", reply.reply);
+      if (spoken) {
+        setPhase("speaking");
+        await speak(reply.reply, true);
+      }
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 409 && !(err.message || "").includes("voice")) {

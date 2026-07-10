@@ -977,6 +977,7 @@ code {
 /* ---- Settings: identity + projects root ---- */
 .settings h2 { margin: 22px 0 4px; }
 .settings h2:first-of-type { margin-top: 4px; }
+.settings-hint { margin: 2px 0 10px; font-size: 11px; line-height: 1.5; color: var(--faint); }
 .settings-select {
   width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text);
   border: 1px solid var(--line); border-radius: var(--radius-sm);

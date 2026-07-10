@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getIdentity,
+  getLanguages,
   getProviders,
   getProjectsRoot,
   getTerminalChoice,
@@ -9,6 +10,7 @@ import {
   setProjectsRoot,
   setTerminalChoice,
   type ApiError,
+  type LanguageOption,
   type ProviderStatus,
 } from "../api";
 
@@ -25,6 +27,10 @@ export function Settings() {
   const [urlDraft, setUrlDraft] = useState<Record<string, string>>({});
   const [name, setName] = useState("");
   const [pronoun, setPronoun] = useState("sir");
+  const [language, setLanguage] = useState("en");
+  const [languages, setLanguages] = useState<LanguageOption[]>([
+    { code: "en", name: "English", native: "English" },
+  ]);
   const [root, setRoot] = useState<string | null>(null);
   const [savedName, setSavedName] = useState(false);
   const [terminal, setTerminal] = useState("terminal");
@@ -41,8 +47,12 @@ export function Settings() {
   async function saveIdentity() {
     setError(null);
     try {
-      const id = await setIdentity(name.trim() || null, pronoun);
+      const id = await setIdentity(name.trim() || null, pronoun, language);
       setName(id.name ?? "");
+      if (id.language) setLanguage(id.language);
+      // Tell the running app to switch language live (no restart needed).
+      window.dispatchEvent(
+        new CustomEvent("jardo-language", { detail: id.language || "en" }));
       setSavedName(true);
       setTimeout(() => setSavedName(false), 1500);
     } catch (e) {
@@ -77,7 +87,11 @@ export function Settings() {
       .then((id) => {
         setName(id.name ?? "");
         if (id.pronoun_style) setPronoun(id.pronoun_style);
+        if (id.language) setLanguage(id.language);
       })
+      .catch(() => undefined);
+    getLanguages()
+      .then((r) => r.languages.length && setLanguages(r.languages))
       .catch(() => undefined);
     getProjectsRoot()
       .then((r) => setRoot(r.root))
@@ -138,6 +152,28 @@ export function Settings() {
             <option value="ma">ma’am</option>
           </select>
         </label>
+        <label className="field">
+          <span>Voice language</span>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="settings-select"
+          >
+            {languages.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.native}
+                {l.native !== l.name ? ` (${l.name})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        {language !== "en" && (
+          <p className="settings-hint">
+            I'll listen and reply in {languages.find((l) => l.code === language)?.name || "your language"}.
+            My reasoning stays in English for accuracy. First switch downloads a
+            multilingual voice model once.
+          </p>
+        )}
         <button className="primary" onClick={saveIdentity}>
           {savedName ? "Saved ✓" : "Save"}
         </button>

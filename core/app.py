@@ -1454,7 +1454,17 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
 
     facts = await store.list_facts(owner.id)
     history = await store.recent_messages(conversation.id, settings.history_window)
-    messages = [{"role": "system", "content": build_system_prompt(owner, facts)}]
+    system_prompt = build_system_prompt(owner, facts)
+    # Multilingual: reason in English but reply in the user's language directly, so
+    # we skip a separate output-translation round-trip on every chat turn.
+    from core import i18n
+    _lang = i18n.current()
+    if _lang != "en":
+        system_prompt += (
+            f"\n\nIMPORTANT: Always write your reply to the user in "
+            f"{i18n.english_name(_lang)}, regardless of the language of the user's "
+            f"message. Keep any code, commands, file paths, and names unchanged.")
+    messages = [{"role": "system", "content": system_prompt}]
     messages += [{"role": m.role, "content": m.content} for m in history]
 
     # Cost-Accuracy Router (§5): classify → decide → dispatch.
