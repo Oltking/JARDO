@@ -382,6 +382,8 @@ export interface Observation {
   progress?: string;      // a concrete progress signal
   note?: string;
   notable?: boolean;
+  steered?: boolean;    // Jardo typed a steering nudge to the agent this beat
+  steer_text?: string;
 }
 
 export async function terminalObserve(): Promise<Observation> {

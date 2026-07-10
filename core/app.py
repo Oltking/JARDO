@@ -958,6 +958,36 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
         app.state.observe_digest = digest
         app.state.observe_last = obs
 
+        async def _steer_chat(p: str) -> str:
+            r = await client.chat(providers.resolve_model(chosen, model),
+                                  [{"role": "user", "content": p}],
+                                  max_tokens=200, temperature=0.3, reasoning_effort="low")
+            return r.content
+
+        # Conductor, not just reviewer: when the agent is stuck or drifting, type a
+        # concrete, project-aware instruction to steer it back toward the goal —
+        # rather than waiting for a permission prompt. Cooled down so we nudge, then
+        # give it room to act before nudging again.
+        if obs.get("state") in ("stuck", "off_task"):
+            import time
+            now = time.time()
+            if now - getattr(app.state, "last_steer_ts", 0) > 45:
+                from core.memory import MemoryStore
+                from core.supervision import steering_nudge
+                nudge = await steering_nudge(active.objective, brief, obs,
+                                             chat_fn=_steer_chat)
+                try:
+                    terminal_watch.type_text(nudge, window_id)
+                    app.state.last_steer_ts = now
+                    obs["steered"] = True
+                    obs["steer_text"] = nudge
+                    await MemoryStore(session).audit(
+                        "jardo", "terminal.steered",
+                        {"state": obs.get("state"), "nudge": nudge[:300]})
+                    await session.commit()
+                except Exception:  # noqa: BLE001 — couldn't type; owner can step in
+                    pass
+
         # Token-budget awareness (Lane C): when the agent is running low on context,
         # tell it to /compact before it hits the wall — once per low spell, so it
         # doesn't nag.

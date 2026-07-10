@@ -738,6 +738,11 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         const o = await terminalObserve();
         if (!alive || !superRef.current) return;
         if (o.state && o.state !== "unknown") setObs(o); // live mission-control read
+        // Conductor: Jardo just steered the agent back on track — surface it.
+        if (o.steered && o.steer_text) {
+          say("event", `↳ Steered ${superRef.current.agent}: ${o.steer_text.replace(/^Jardo \(supervising\):\s*/i, "")}`, true);
+          void speak("Nudged it back on track.");
+        }
         const state = o.state || "";
         if (o.notable && state && state !== lastStateRef.current) {
           lastStateRef.current = state;

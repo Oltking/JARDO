@@ -149,6 +149,49 @@ Reply with ONLY a JSON object:
 {{"decision": "APPROVE" or "DECLINE", "reason": "<one concise expert sentence>", "guidance": "<if DECLINE, what to do instead; else empty>"}}"""
 
 
+_STEER_PROMPT = """\
+You are Jardo, an expert engineering supervisor watching a coding agent (Claude
+Code / Gemini CLI) work toward the owner's goal. The agent appears to be {problem}.
+Give it ONE short, concrete instruction (1-2 sentences) to get back on track toward
+the goal, grounded in the project's current state. Name the next step to take. Do
+not greet, explain yourself, or hedge — output ONLY the instruction to send.
+
+{brief}
+
+What the agent is doing now: {activity}
+Observed issue: {issue}
+
+Instruction:"""
+
+
+async def steering_nudge(objective: str, brief: str, obs: dict,
+                         chat_fn=None) -> str:
+    """A concrete, project-aware instruction Jardo types to the agent when it's
+    stuck or drifting — steering it toward the goal instead of only reacting to
+    permission prompts. This is the conductor role: keep the work moving and on
+    target. Model-written when possible, with a sensible fallback."""
+    state = obs.get("state")
+    problem = "stuck — looping or blocked" if state == "stuck" else "drifting off-task"
+    if chat_fn is not None:
+        try:
+            from core.sentinel.checks import redact
+            raw = await chat_fn(_STEER_PROMPT.format(
+                problem=problem, brief=redact(brief)[:3000],
+                activity=redact(obs.get("activity", ""))[:300],
+                issue=redact(obs.get("issue", ""))[:300]))
+            text = raw.strip().strip('"').strip()
+            if text:
+                return "Jardo (supervising): " + text[:500]
+        except Exception:  # noqa: BLE001 — fall back to a plain nudge
+            pass
+    goal = (objective or "").strip() or "the goal"
+    if state == "off_task":
+        return ("Jardo (supervising): that looks off-task. Refocus on "
+                f"{goal} and take the next concrete step toward it.")
+    return ("Jardo (supervising): you seem stuck. Step back, try a different "
+            f"approach, and keep moving toward {goal}.")
+
+
 async def judge_action(objective: str, brief: str, action: str,
                        chat_fn=None) -> ActionJudgment:
     """Expert, context-aware judgment of a single proposed action. Uses the model
