@@ -16,7 +16,14 @@ import httpx
 
 
 class FireworksError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None, body: str = ""):
+        super().__init__(message)
+        self.status = status
+        self.body = body
+
+    @property
+    def trial_exhausted(self) -> bool:
+        return self.status == 402 or "trial_exhausted" in self.body
 
 
 @dataclass
@@ -65,7 +72,8 @@ class FireworksClient:
             # 401/403: bad key; 429: rate limit (docs/vendor/fireworks/rate-limits.md);
             # 5xx: transient. The Phase 2 router adds retries with backoff (§4.2).
             raise FireworksError(
-                f"Fireworks API error {response.status_code}: {response.text[:500]}"
+                f"Fireworks API error {response.status_code}: {response.text[:500]}",
+                status=response.status_code, body=response.text[:500],
             )
         data = response.json()
         try:

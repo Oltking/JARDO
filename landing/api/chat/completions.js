@@ -131,7 +131,7 @@ module.exports = async (req, res) => {
           ...(AMD_API_KEY ? { Authorization: `Bearer ${AMD_API_KEY}` } : {}),
         },
         body: JSON.stringify(amdBody),
-        signal: AbortSignal.timeout(35000),
+        signal: AbortSignal.timeout(55000), // transformers is slower than vLLM; stay under Vercel's 60s
       });
       if (r.ok) {
         text = await r.text();

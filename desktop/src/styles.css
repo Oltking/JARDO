@@ -904,6 +904,9 @@ code {
 .messages {
   width: 100%; max-width: 720px; margin: 0 auto;
   display: flex; flex-direction: column; gap: 12px;
+  /* Grow to full content height so the .stream scrolls, instead of shrinking to
+     fit (which made messages overlap/stack once they filled the screen). */
+  flex: 0 0 auto;
 }
 .stream-anchor { height: 1px; flex: none; }
 .line { display: flex; flex-shrink: 0; width: 100%; }

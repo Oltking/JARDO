@@ -50,6 +50,11 @@ def _embedded_queue():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # A Finder-launched .app has a minimal PATH; restore the user's real PATH so
+    # coding-agent CLIs (claude, gemini), npm, and git are found (fixes the
+    # bundled-app "claude cli not in path").
+    from core.env_path import ensure_full_path
+    ensure_full_path()
     if is_sqlite():
         # Embedded build: create tables from the models (no Alembic) and run jobs
         # in-process instead of requiring Postgres + Redis.
@@ -1233,7 +1238,19 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
 
     try:
         cached = await cached_call(session, decision.model, messages, _miss)
-    except (FireworksError, OllamaUnavailable) as exc:
+    except FireworksError as exc:
+        # Free trial used up: answer plainly instead of throwing a scary error.
+        if getattr(exc, "trial_exhausted", False):
+            reply = ("You've used up the free trial. To keep going, add your own "
+                     "Fireworks API key in Settings, or point me at a local Ollama "
+                     "model for free.")
+            await store.add_message(conversation.id, "assistant", reply)
+            await session.commit()
+            return ChatResponse(reply=reply, conversation_id=conversation.id,
+                                model="trial-exhausted", prompt_tokens=0,
+                                completion_tokens=0)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except OllamaUnavailable as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if cached.cached:
