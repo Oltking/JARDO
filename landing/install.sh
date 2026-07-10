@@ -9,9 +9,11 @@
 # gymnastics. We also strip quarantine as a belt-and-suspenders step.
 set -euo pipefail
 
-VERSION="v1.0.0"
 ASSET="Jardo_0.1.0_aarch64.dmg"
-URL="https://github.com/Oltking/JARDO/releases/download/${VERSION}/${ASSET}"
+# /releases/latest/download/ redirects to the newest published release's asset,
+# so cutting a new release (with this asset name) updates installs automatically —
+# no need to edit this script per version.
+URL="https://github.com/Oltking/JARDO/releases/latest/download/${ASSET}"
 APP_NAME="Jardo.app"
 
 say() { printf "\033[1m==>\033[0m %s\n" "$1"; }
