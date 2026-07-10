@@ -218,6 +218,7 @@ export interface StartProjectResult {
   agent?: string;
   created?: boolean;
   launched?: boolean;
+  launch_error?: string | null;
 }
 
 export interface NewProjectDetails {

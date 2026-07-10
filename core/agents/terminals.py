@@ -105,12 +105,29 @@ class TerminalApp(TerminalDriver):
     def open(self, shell_command: str):
         import os
         import tempfile
+        import time
         import uuid
         path = os.path.join(tempfile.gettempdir(),
                             f"jardo_launch_{uuid.uuid4().hex[:8]}.sh")
         with open(path, "w", encoding="utf-8") as f:
             f.write("#!/bin/bash\n" + shell_command + "\n")
         os.chmod(path, 0o755)
+        # Make sure Terminal is actually running before we send Apple Events. On a
+        # cold start `do script` races the app launch and fails with "Connection
+        # is invalid" — `open -a` boots it via LaunchServices (no Apple Events),
+        # then a short wait lets it come up so the scripted launch lands.
+        was_running = _osa(
+            'tell application "System Events" to (name of processes) '
+            'contains "Terminal"').strip() == "true"
+        if not was_running:
+            subprocess.run(["open", "-a", "Terminal"], check=False)
+            for _ in range(20):  # up to ~2s for Terminal to be scriptable
+                time.sleep(0.1)
+                try:
+                    _osa('tell application "Terminal" to count windows')
+                    break
+                except RuntimeError:
+                    continue
         _osa('tell application "Terminal" to activate',
              f'tell application "Terminal" to do script "bash {path}"')
         return self.front_window()

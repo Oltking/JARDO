@@ -514,15 +514,20 @@ async def projects_start(body: StartProjectRequest,
     await session.commit()
 
     launched = True
+    launch_error = None
     try:
         # Pin supervision to the new window so we watch exactly this terminal.
         app.state.supervise_window_id = terminal_watch.open_interactive(
             onboard.launch_shell(adapter.cli, path, body.agent))
-    except Exception:  # noqa: BLE001 — folder is ready even if the launch fails
+    except Exception as exc:  # noqa: BLE001 — folder is ready even if launch fails
         launched = False
+        launch_error = str(exc)[:200]
+        import logging
+        logging.getLogger("jardo.terminal").warning("terminal launch failed: %s", exc)
 
     return {"ok": True, "path": path, "name": name, "goal": body.goal.strip(),
-            "agent": body.agent, "created": created, "launched": launched}
+            "agent": body.agent, "created": created, "launched": launched,
+            "launch_error": launch_error}
 
 
 @app.get("/memory")

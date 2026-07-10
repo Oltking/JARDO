@@ -605,9 +605,12 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         res = await startProject(intent.goal, intent.agent, extra);
       }
       if (res.ok) {
+        const reason = res.launch_error
+          ? ` (${res.launch_error.replace(/^osascript failed:\s*/i, "")})`
+          : "";
         const where = res.launched
           ? `I created ${res.name} and started ${intent.agent} on it in your terminal. I'm watching it now — I'll answer its prompts.`
-          : `I created ${res.name} and set it up, but couldn't open the terminal. Open it and run ${intent.agent} in that folder, then I'll supervise.`;
+          : `I created ${res.name} and set it up, but couldn't open the terminal${reason}. Open Terminal, run ${intent.agent} in that folder, and I'll supervise. If macOS blocked me, grant Jardo control of Terminal in System Settings → Privacy & Security → Automation.`;
         say("jardo", where);
         if (spoken) {
           setPhase("speaking");
