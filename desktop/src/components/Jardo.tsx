@@ -6,6 +6,7 @@ import {
   getIdentity,
   getProviders,
   localize,
+  toEnglish,
   openPrivacySettings,
   requestAccessibility,
   routeIntent,
@@ -360,9 +361,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         return;
       }
       if (isNegative(raw)) {
-        const line = "Okay, cancelled.";
-        say("jardo", line);
-        if (spoken) await speak(line);
+        await jardoSay("Okay, cancelled.", spoken);
         return;
       }
       // Neither yes nor no — fall through and treat as new input.
@@ -370,9 +369,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
     if (superRef.current && wantsStop(raw)) {
       stopSupervising();
-      const line = "Okay — I've stopped watching your terminal.";
-      say("jardo", line);
-      if (spoken) await speak(line);
+      await jardoSay("Okay — I've stopped watching your terminal.", spoken);
       return;
     }
 
@@ -380,8 +377,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     if (!superRef.current) {
       const quick = quickAnswer(raw, nameRef.current);
       if (quick) {
-        say("jardo", quick);
-        if (spoken) await speak(quick);
+        await jardoSay(quick, spoken);
         return;
       }
     }
@@ -421,12 +417,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       setPhase("thinking");
       try {
         const r = await supervisionReport();
-        const line = r.spoken || "Nothing to report yet.";
-        say("jardo", line);
-        if (spoken) {
-          setPhase("speaking");
-          await speak(line);
-        }
+        await jardoSay(r.spoken || "Nothing to report yet.", spoken);
       } catch {
         setError("Couldn't pull the report.");
       } finally {
@@ -437,9 +428,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     if (action === "supervise") {
       if (superRef.current) {
         // Already watching — the owner is just reaffirming. Reassure, don't restart.
-        const line = `Still on it — I'm watching your terminal and handling ${superRef.current.agent}'s prompts.`;
-        say("jardo", line);
-        if (spoken) await speak(line);
+        await jardoSay(
+          `Still on it — I'm watching your terminal and handling ${superRef.current.agent}'s prompts.`,
+          spoken);
         return;
       }
       await startSupervising({ goal: msg, agent }, spoken);
@@ -457,17 +448,15 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         specFilename: null,
         spoken,
       });
-      const line = `Let's set that up properly. I've opened a quick form — give it a name and tell me more about what you want built. You can attach a spec file too.`;
-      say("jardo", line);
-      if (spoken) await speak(line);
+      await jardoSay(
+        `Let's set that up properly. I've opened a quick form — give it a name and tell me more about what you want built. You can attach a spec file too.`,
+        spoken);
       return;
     }
     if (action === "stop" && superRef.current) {
       // Router caught a "stop" the offline check missed (e.g. accented phrasing).
       stopSupervising();
-      const line = "Okay — I've stopped watching your terminal.";
-      say("jardo", line);
-      if (spoken) await speak(line);
+      await jardoSay("Okay — I've stopped watching your terminal.", spoken);
       return;
     }
 
@@ -561,21 +550,14 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     try {
       let res = await whereAmI(null);
       if (res.needs_folder) {
-        const ask = "Which project? Pick the folder you're working on.";
-        say("jardo", ask);
-        if (spoken) await speak(ask);
+        await jardoSay("Which project? Pick the folder you're working on.", spoken);
         const chosen = await chooseProject(); // native folder picker
         res = await whereAmI(chosen.path);
       }
-      const line = res.spoken || "I couldn't read that project.";
-      say("jardo", line);
       if (res.from_agent_memory === false && res.found) {
         say("event", "read from git (no agent memory found for this folder)", true);
       }
-      if (spoken) {
-        setPhase("speaking");
-        await speak(line);
-      }
+      await jardoSay(res.spoken || "I couldn't read that project.", spoken);
     } catch (e) {
       const err = e as ApiError;
       // 409 from choose = the owner cancelled the picker; stay quiet.
@@ -620,9 +602,9 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     try {
       let res = await startProject(intent.goal, intent.agent, extra);
       if (res.needs_root) {
-        const ask = "First, where should I keep your projects? Pick the folder that holds them.";
-        say("jardo", ask);
-        if (spoken) await speak(ask);
+        await jardoSay(
+          "First, where should I keep your projects? Pick the folder that holds them.",
+          spoken);
         await setProjectsRoot(null); // native folder chooser
         res = await startProject(intent.goal, intent.agent, extra);
       }
@@ -633,11 +615,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         const where = res.launched
           ? `I created ${res.name} and started ${intent.agent} on it in your terminal. I'm watching it now — I'll answer its prompts.`
           : `I created ${res.name} and set it up, but couldn't open the terminal${reason}. Open Terminal, run ${intent.agent} in that folder, and I'll supervise. If macOS blocked me, grant Jardo control of Terminal in System Settings → Privacy & Security → Automation.`;
-        say("jardo", where);
-        if (spoken) {
-          setPhase("speaking");
-          await speak(where);
-        }
+        await jardoSay(where, spoken);
         if (res.launched) {
           const active: Supervising = { agent: intent.agent, goal: res.goal || intent.goal };
           superRef.current = active;
@@ -647,9 +625,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     } catch (e) {
       const err = e as ApiError;
       if (err.status !== 409 || !(err.message || "").includes("chosen")) {
-        const line = err.message || "I couldn't start that project.";
-        say("jardo", line);
-        if (spoken) await speak(line);
+        await jardoSay(err.message || "I couldn't start that project.", spoken);
       }
     } finally {
       setPhase("idle");
@@ -670,20 +646,16 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       const active: Supervising = { agent: intent.agent, goal: res.goal || intent.goal };
       superRef.current = active;
       setSupervising(active);
-      const line = `On it. I'm watching your terminal and I'll answer ${intent.agent}'s permission prompts — approving what's safe and on-task, declining anything risky.`;
-      say("jardo", line);
-      if (spoken) {
-        setPhase("speaking");
-        await speak(line);
-      }
+      await jardoSay(
+        `On it. I'm watching your terminal and I'll answer ${intent.agent}'s permission prompts — approving what's safe and on-task, declining anything risky.`,
+        spoken);
     } catch (e) {
       const err = e as ApiError;
-      const line =
+      await jardoSay(
         err.status === 409
           ? "I couldn't find a terminal to watch. Open Terminal with your agent running, then ask me again."
-          : err.message || "I couldn't start supervising.";
-      say("jardo", line);
-      if (spoken) await speak(line);
+          : err.message || "I couldn't start supervising.",
+        spoken);
     } finally {
       setPhase("idle");
     }
@@ -712,8 +684,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
             const line = r.ended_reason
               ? `Looks like ${r.ended_reason}, so I've stopped watching.`
               : `${agent} stopped, so I've stopped watching.`;
-            say("jardo", line);
-            void speak(line);
+            void jardoSay(line, true);
           }
           return;
         }
@@ -791,12 +762,25 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supervising]);
 
+  // Typed input: translate to English first if the user types in their language,
+  // so the English core parses it the same as speech. Show what they typed.
+  async function submitTyped(t: string) {
+    const raw = t.trim();
+    if (!raw) return;
+    if (langRef.current !== "en") {
+      const en = await toEnglish(raw);
+      await handle(en, false, raw);
+    } else {
+      await handle(raw, false);
+    }
+  }
+
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const t = input;
       setInput("");
-      handle(t, false);
+      void submitTyped(t);
     }
   }
 
@@ -1053,7 +1037,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
           onClick={() => {
             const t = input;
             setInput("");
-            handle(t, false);
+            void submitTyped(t);
           }}
           disabled={!input.trim()}
         >

@@ -192,15 +192,30 @@ export async function getLanguages(): Promise<{ languages: LanguageOption[]; cur
   }
 }
 
+// Small cache so repeated UI phrases (e.g. "Okay, cancelled.") aren't re-translated
+// on every use. Keyed by target + text.
+const _translateCache = new Map<string, string>();
+
 // Translate text into the user's chosen language (or `to`). Best-effort: returns
 // the original text if the backend can't translate, so replies never break.
 export async function localize(text: string, to?: string): Promise<string> {
+  const key = `${to ?? "*"}:${text}`;
+  const hit = _translateCache.get(key);
+  if (hit !== undefined) return hit;
   try {
     const r = await invoke<{ text: string }>("i18n_translate", { text, to: to ?? null });
-    return r.text || text;
+    const out = r.text || text;
+    _translateCache.set(key, out);
+    return out;
   } catch {
     return text;
   }
+}
+
+// Translate typed input into English so the English-tuned core works no matter
+// what language the user types in.
+export async function toEnglish(text: string): Promise<string> {
+  return localize(text, "en");
 }
 
 // Ask macOS for Accessibility trust (shows the system prompt if not yet trusted)

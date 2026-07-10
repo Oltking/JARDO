@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getBriefing,
+  getIdentity,
+  localize,
   setObjective,
   voiceSay,
   voiceTranscribe,
@@ -18,10 +20,20 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
   const [confirmed, setConfirmed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const spokenRef = useRef(false);
+  const langRef = useRef("en");
+  const [greeting, setGreeting] = useState<string | null>(null); // localized for display
   // Once we've handed off (skip or a set goal), any in-flight voice capture must
   // not also fire — otherwise the briefing keeps listening after Skip and you get
   // two responders talking over each other in the chat.
   const doneRef = useRef(false);
+
+  // Speak in the user's language: the briefing text is English, so translate it
+  // before voicing (the backend also picks the language's native voice). This is
+  // the FIRST thing a non-English user hears — it must be in their language.
+  async function speakL(text: string) {
+    const out = langRef.current !== "en" ? await localize(text) : text;
+    await voiceSay(out);
+  }
 
   const finish = useCallback(
     (g?: string) => {
@@ -49,14 +61,14 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
         try {
           // Don't parrot the raw sentence back ("I'll help you with I want to
           // achieve a project"); a short, natural acknowledgement reads better.
-          await voiceSay("Got it. Let's get started.");
+          await speakL("Got it. Let's get started.");
         } catch {
           /* no voice — the visual confirmation still shows */
         }
         finish(g);
       } else {
         try {
-          await voiceSay("I didn't catch that. You can say it again, or type it below.");
+          await speakL("I didn't catch that. You can say it again, or type it below.");
         } catch {
           /* ignore */
         }
@@ -71,19 +83,27 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
   const speakGoal = autoListenForGoal;
 
   useEffect(() => {
-    getBriefing()
-      .then(async (b) => {
-        setData(b);
-        if (spokenRef.current) return;
-        spokenRef.current = true;
-        try {
-          await voiceSay(b.spoken); // speak greeting + updates + the question
-        } catch {
-          /* no voice — fall through to manual */
-        }
-        autoListenForGoal(); // then listen for the answer automatically
-      })
-      .catch((e: ApiError) => setError(e.message));
+    getIdentity()
+      .then((id) => (langRef.current = id.language || "en"))
+      .catch(() => undefined)
+      .finally(() => {
+        getBriefing()
+          .then(async (b) => {
+            setData(b);
+            if (langRef.current !== "en") {
+              localize(b.greeting).then(setGreeting).catch(() => undefined);
+            }
+            if (spokenRef.current) return;
+            spokenRef.current = true;
+            try {
+              await speakL(b.spoken); // greeting + updates + question, in-language
+            } catch {
+              /* no voice — fall through to manual */
+            }
+            autoListenForGoal(); // then listen for the answer automatically
+          })
+          .catch((e: ApiError) => setError(e.message));
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -118,7 +138,7 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
 
         {data && (
           <>
-            <h1 className="briefing-greeting">{data.greeting}</h1>
+            <h1 className="briefing-greeting">{greeting || data.greeting}</h1>
 
             <ul className="briefing-updates">
               {data.updates.map((u, i) => (

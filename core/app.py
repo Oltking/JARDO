@@ -361,10 +361,15 @@ class TranslateRequest(BaseModel):
 @app.post("/i18n/translate")
 async def i18n_translate(body: TranslateRequest) -> dict:
     """Translate text into the target (default: the user's chosen language). Used to
-    localize Jardo's English replies for display + speech."""
+    localize Jardo's English replies (→ user's language) AND to translate typed
+    input the other way (→ English) so the core stays English regardless of input."""
     from core import i18n
     target = i18n.normalize(body.to or i18n.current())
-    out = await i18n.translate(body.text, target, _model_chat)
+    if target == "en":
+        # →English: translate FROM the user's current language.
+        out = await i18n.to_english(body.text, i18n.current(), _model_chat)
+    else:
+        out = await i18n.translate(body.text, target, _model_chat)
     return {"text": out, "language": target}
 
 
