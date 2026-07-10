@@ -1248,6 +1248,12 @@ code {
   padding: 12px 13px; font: inherit; font-size: 0.98rem; transition: border-color 0.2s;
 }
 .onboard-field input:focus { outline: none; border-color: var(--faint); }
+.onboard-select {
+  width: 100%; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 12px 13px; font: inherit; font-size: 0.98rem; cursor: pointer;
+}
+.onboard-select:focus { outline: none; border-color: var(--faint); }
 .onboard-pronoun {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; margin-bottom: 22px;

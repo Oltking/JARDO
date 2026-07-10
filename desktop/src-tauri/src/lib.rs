@@ -335,10 +335,30 @@ async fn get_identity() -> Result<serde_json::Value, ApiError> {
 async fn set_identity(
     name: Option<String>,
     pronoun_style: Option<String>,
+    language: Option<String>,
 ) -> Result<serde_json::Value, ApiError> {
     let resp = client()?
         .post(format!("{}/settings/identity", core_base()))
-        .json(&serde_json::json!({ "name": name, "pronoun_style": pronoun_style }))
+        .json(&serde_json::json!({
+            "name": name, "pronoun_style": pronoun_style, "language": language }))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn i18n_languages() -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .get(format!("{}/i18n/languages", core_base()))
+        .send().await.map_err(ApiError::transport)?;
+    parse_json(resp).await
+}
+
+#[tauri::command]
+async fn i18n_translate(text: String, to: Option<String>)
+    -> Result<serde_json::Value, ApiError> {
+    let resp = client()?
+        .post(format!("{}/i18n/translate", core_base()))
+        .json(&serde_json::json!({ "text": text, "to": to }))
         .send().await.map_err(ApiError::transport)?;
     parse_json(resp).await
 }
@@ -871,6 +891,8 @@ pub fn run() {
             set_provider,
             get_identity,
             set_identity,
+            i18n_languages,
+            i18n_translate,
             reset_account,
             request_accessibility,
             open_privacy_settings,

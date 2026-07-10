@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { setIdentity, setProvider, type ApiError } from "../api";
+import { useEffect, useState } from "react";
+import {
+  getLanguages,
+  setIdentity,
+  setProvider,
+  type ApiError,
+  type LanguageOption,
+} from "../api";
 import { HalftoneAvatar } from "./HalftoneAvatar";
 
 // First-run onboarding (new user, new computer). A shipped user has no terminal,
@@ -12,6 +18,16 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
   const [pronoun, setPronoun] = useState<"sir" | "ma">("sir");
+  const [language, setLanguage] = useState("en");
+  const [languages, setLanguages] = useState<LanguageOption[]>([
+    { code: "en", name: "English", native: "English" },
+  ]);
+
+  useEffect(() => {
+    getLanguages()
+      .then((r) => r.languages.length && setLanguages(r.languages))
+      .catch(() => undefined);
+  }, []);
   const [apiKey, setApiKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +41,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await setIdentity(n, pronoun);
+      await setIdentity(n, pronoun, language);
       setStep("key");
     } catch (e) {
       setError((e as ApiError).message || "Couldn't save that.");
@@ -85,6 +101,27 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                 ))}
               </div>
             </div>
+            <label className="onboard-field">
+              <span>Talk to me in</span>
+              <select
+                className="onboard-select"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+              >
+                {languages.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.native}
+                    {l.native !== l.name ? ` (${l.name})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {language !== "en" && (
+              <p className="onboard-hint">
+                🌍 I'll listen and reply in your language — my thinking stays in
+                English under the hood for accuracy.
+              </p>
+            )}
             {error && <p className="onboard-error">{error}</p>}
             <button className="onboard-primary" disabled={busy} onClick={saveName}>
               {busy ? "Saving…" : "Continue"}

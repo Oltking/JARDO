@@ -159,6 +159,7 @@ export async function routeIntent(message: string): Promise<RoutedIntent> {
 export interface Identity {
   name: string | null;
   pronoun_style: string | null;
+  language?: string | null;
 }
 
 export async function getIdentity(): Promise<Identity> {
@@ -167,12 +168,38 @@ export async function getIdentity(): Promise<Identity> {
 
 export async function setIdentity(
   name: string | null,
-  pronounStyle: string | null
+  pronounStyle: string | null,
+  language: string | null = null
 ): Promise<Identity> {
   try {
-    return await invoke<Identity>("set_identity", { name, pronounStyle });
+    return await invoke<Identity>("set_identity", { name, pronounStyle, language });
   } catch (e) {
     throw toApiError(e);
+  }
+}
+
+export interface LanguageOption {
+  code: string;
+  name: string;
+  native: string;
+}
+
+export async function getLanguages(): Promise<{ languages: LanguageOption[]; current: string }> {
+  try {
+    return await invoke("i18n_languages");
+  } catch {
+    return { languages: [{ code: "en", name: "English", native: "English" }], current: "en" };
+  }
+}
+
+// Translate text into the user's chosen language (or `to`). Best-effort: returns
+// the original text if the backend can't translate, so replies never break.
+export async function localize(text: string, to?: string): Promise<string> {
+  try {
+    const r = await invoke<{ text: string }>("i18n_translate", { text, to: to ?? null });
+    return r.text || text;
+  } catch {
+    return text;
   }
 }
 
@@ -413,7 +440,8 @@ export interface VoiceStatus {
 }
 
 export interface TranscribeResult {
-  transcript: string;
+  transcript: string; // ENGLISH (translated) — what the core logic runs on
+  native?: string;    // what the user actually said, in their language (for display)
   amplitude: number;
   heard: boolean; // false = no speech within the listen timeout (silence)
   model_pending?: boolean; // speech model still downloading (first run)

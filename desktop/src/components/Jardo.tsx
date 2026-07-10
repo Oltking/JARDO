@@ -5,6 +5,7 @@ import {
   chooseProject,
   getIdentity,
   getProviders,
+  localize,
   openPrivacySettings,
   requestAccessibility,
   routeIntent,
@@ -214,6 +215,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   // second answer from a voice capture that overlapped it (no two responders).
   const busyRef = useRef(false);
   const nameRef = useRef<string | null>(null);
+  const langRef = useRef<string>("en"); // user's voice language (i18n code)
 
   function say(who: Line["who"], text: string, ok?: boolean) {
     setLines((l) => [...l, { who, text, ok }]);
@@ -230,15 +232,33 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
   // Speak, but muffle the mic while we do it (and for a moment after) so Jardo
   // never hears its own voice and answers itself.
-  async function speak(text: string) {
+  // Speak in the user's language. Jardo's text is generated in English; translate
+  // it just before voicing (the backend also selects the language's native voice).
+  // Pass alreadyLocalized=true when the caller has translated the text itself.
+  async function speak(text: string, alreadyLocalized = false) {
     speakingRef.current = true;
     try {
-      await voiceSay(text);
+      const out =
+        !alreadyLocalized && langRef.current !== "en"
+          ? await localize(text)
+          : text;
+      await voiceSay(out);
     } catch {
       /* no voice — fine */
     } finally {
       speakingRef.current = false;
       suppressUntilRef.current = Date.now() + 900; // ignore the tail echo
+    }
+  }
+
+  // Show + speak a Jardo reply in the user's language: translate once, use the
+  // same text for the chat bubble and the voice (so they always match).
+  async function jardoSay(text: string, spoken: boolean) {
+    const shown = langRef.current !== "en" ? await localize(text) : text;
+    say("jardo", shown);
+    if (spoken) {
+      setPhase("speaking");
+      await speak(shown, true);
     }
   }
 
@@ -258,6 +278,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     getIdentity()
       .then((id) => {
         nameRef.current = id.name;
+        langRef.current = id.language || "en";
       })
       .catch(() => undefined);
     getProviders()
@@ -306,20 +327,22 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   // ---- one place every utterance flows through, voice or typed --------------
   // Wrapper: mark "busy" for the entire turn so the mic loop won't fire a second
   // response over a typed one. The real logic lives in handleUtterance.
-  async function handle(text: string, spoken: boolean) {
+  // `text` is always English (the core's language). `display` is what to show in
+  // the "you" bubble — the user's own words when they spoke another language.
+  async function handle(text: string, spoken: boolean, display?: string) {
     if (!text.trim()) return;
     busyRef.current = true;
     try {
-      await handleUtterance(text, spoken);
+      await handleUtterance(text, spoken, display);
     } finally {
       busyRef.current = false;
     }
   }
 
-  async function handleUtterance(text: string, spoken: boolean) {
+  async function handleUtterance(text: string, spoken: boolean, display?: string) {
     const raw = text.trim();
     if (!raw) return;
-    say("you", raw); // immediate echo — stays responsive
+    say("you", (display || raw).trim()); // show the user's own words; act on English
 
     // --- Instant, offline handling first: the most common turns (confirmations,
     // stop, identity) need no model round-trip, so they answer immediately. Only
@@ -457,11 +480,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       const reply = await sendChat(msg, convRef.current);
       convRef.current = reply.conversation_id;
       setNeedsSetup(false);
-      say("jardo", reply.reply);
-      if (spoken) {
-        setPhase("speaking");
-        await speak(reply.reply);
-      }
+      await jardoSay(reply.reply, spoken); // localized bubble + voice
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 409 && !(err.message || "").includes("voice")) {
@@ -525,7 +544,8 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
         // handled (e.g. the owner just typed) so we never get two responders.
         if (speakingRef.current || busyRef.current || Date.now() < suppressUntilRef.current)
           continue;
-        await handle(heard.transcript, true);
+        // transcript is English (for the core); native is what they actually said.
+        await handle(heard.transcript, true, heard.native);
       }
     } catch (e) {
       setError((e as ApiError).message || "Voice error.");
