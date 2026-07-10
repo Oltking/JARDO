@@ -25,6 +25,11 @@ const FIREWORKS_BASE_URL =
 const AMD_BASE_URL = (process.env.AMD_BASE_URL || "").replace(/\/$/, "");
 const AMD_API_KEY = process.env.AMD_API_KEY || "";
 const AMD_MODEL = process.env.AMD_MODEL || ""; // vLLM --served-model-name
+// A known-good serverless Fireworks model used as the last-resort fallback when
+// the requested model is retired/unavailable (as the on-demand Gemma deployment
+// was). Any single model failing must never take the whole request down.
+const FALLBACK_MODEL =
+  process.env.FALLBACK_MODEL || "accounts/fireworks/models/gpt-oss-120b";
 const FREE_TRIAL_USD = parseFloat(process.env.FREE_TRIAL_USD || "1");
 const USD_PER_1M_TOKENS = parseFloat(process.env.USD_PER_1M_TOKENS || "0.30");
 const GLOBAL_CAP_USD = process.env.GLOBAL_CAP_USD
@@ -118,10 +123,9 @@ module.exports = async (req, res) => {
 
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
 
-  // 1) Try the AMD Instinct droplet first (self-hosted, ROCm/vLLM) when configured.
-  let text = null;
-  let served = "fireworks";
-  if (AMD_BASE_URL) {
+  // One place to call the AMD droplet (Gemma on ROCm) — free, so it's tried first.
+  async function callAmd() {
+    if (!AMD_BASE_URL) return null;
     try {
       const amdBody = AMD_MODEL ? { ...body, model: AMD_MODEL } : body;
       const r = await fetch(`${AMD_BASE_URL}/chat/completions`, {
@@ -133,31 +137,60 @@ module.exports = async (req, res) => {
         body: JSON.stringify(amdBody),
         signal: AbortSignal.timeout(55000), // transformers is slower than vLLM; stay under Vercel's 60s
       });
-      if (r.ok) {
-        text = await r.text();
-        served = "amd";
-      }
+      return r.ok ? await r.text() : null;
     } catch {
-      /* droplet down/slow → fall back to Fireworks below */
+      return null; // droplet down/slow → caller falls through
     }
   }
 
-  // 2) Fireworks (Gemma), the cloud tier and the fallback.
-  if (text === null) {
-    let upstream;
+  // One place to call Fireworks with a specific model.
+  async function callFireworks(model) {
     try {
-      upstream = await fetch(`${FIREWORKS_BASE_URL}/chat/completions`, {
+      const r = await fetch(`${FIREWORKS_BASE_URL}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, model }),
       });
+      return { ok: r.ok, status: r.status, text: await r.text() };
     } catch (e) {
-      res.status(502).json({ error: "upstream_unreachable", message: String(e) });
-      return;
+      return { ok: false, status: 502, text: JSON.stringify({ error: String(e) }) };
     }
-    text = await upstream.text();
-    if (!upstream.ok) {
-      res.status(upstream.status).send(text);
+  }
+
+  // Resilient chain — no single model/provider is a point of failure:
+  //   AMD (Gemma, free)  →  requested Fireworks model  →  known-good Fireworks model
+  // A retired/unavailable model (as the on-demand Gemma deployment became) just
+  // falls through to the next option instead of failing the request.
+  let text = null;
+  let served = "fireworks";
+  let lastErr = null;
+
+  text = await callAmd();
+  if (text !== null) served = "amd";
+
+  if (text === null) {
+    const requested = body.model || FALLBACK_MODEL;
+    const tried = new Set();
+    for (const model of [requested, FALLBACK_MODEL]) {
+      if (!model || tried.has(model)) continue;
+      tried.add(model);
+      const fw = await callFireworks(model);
+      if (fw.ok) {
+        text = fw.text;
+        served = "fireworks";
+        break;
+      }
+      lastErr = fw;
+    }
+    // Everything failed. As a final safety net, try AMD once more (it may have
+    // recovered) before surfacing the error.
+    if (text === null) {
+      text = await callAmd();
+      if (text !== null) served = "amd";
+    }
+    if (text === null) {
+      res.status(lastErr ? lastErr.status : 502).send(
+        lastErr ? lastErr.text : JSON.stringify({ error: "all_providers_unavailable" }));
       return;
     }
   }
