@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Without these usage strings macOS never prompts for permission and hands
+       the app a silent input stream (mic "hears nothing") or blocks Terminal
+       control. Tauri merges this file into the bundled Info.plist at build time. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Jardo listens for your voice so you can talk to it and give it instructions hands-free.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Jardo controls your terminal to supervise coding agents and answer their prompts on your behalf.</string>
+</dict>
+</plist>
