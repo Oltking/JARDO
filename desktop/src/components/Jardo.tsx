@@ -296,7 +296,21 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   useEffect(() => {
     const onLang = (e: Event) => {
       langRef.current = (e as CustomEvent).detail || "en";
-      voiceStatus().then(setStatus).catch(() => undefined);
+      // Re-poll voice status so the "setting up voice" banner reflects (and clears)
+      // the new language's model download, which the first call kicks off.
+      let tries = 0;
+      const poll = window.setInterval(async () => {
+        tries += 1;
+        try {
+          const s = await voiceStatus();
+          setStatus(s);
+          if (s.model_ready || s.available === false || tries > 40) {
+            window.clearInterval(poll);
+          }
+        } catch {
+          if (tries > 40) window.clearInterval(poll);
+        }
+      }, 3000);
     };
     window.addEventListener("jardo-language", onLang);
     return () => window.removeEventListener("jardo-language", onLang);
@@ -1018,7 +1032,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
                     {l.ok ? "✓" : "✗"} {l.text}
                   </span>
                 ) : (
-                  <div className="bubble">{l.text}</div>
+                  <div className="bubble" dir="auto">{l.text}</div>
                 )}
               </div>
             ))}
