@@ -216,7 +216,10 @@ module.exports = async (req, res) => {
   }
 
   res.setHeader("x-jardo-served-by", served);
-  res.setHeader("x-jardo-amd-note", amdNote);
+  // Header values must be single-line ASCII — the AMD note can carry an error body
+  // with newlines/quotes, so scrub it or setHeader throws (500).
+  res.setHeader("x-jardo-amd-note",
+    String(amdNote).replace(/[^\x20-\x7E]+/g, " ").slice(0, 200));
   res.setHeader("x-jardo-trial-usd", String(FREE_TRIAL_USD));
   // Meter only Fireworks usage. AMD self-hosted compute is free, so it does not
   // burn the trial (and it's the cheaper-tier cost story).
