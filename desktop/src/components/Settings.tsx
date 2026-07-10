@@ -178,6 +178,7 @@ export function Settings() {
           >
             <option value="sir">sir</option>
             <option value="ma">ma’am</option>
+            <option value="neutral">just my name</option>
           </select>
         </label>
         <label className="field">

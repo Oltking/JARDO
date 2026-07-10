@@ -391,12 +391,16 @@ async def infra_status() -> dict:
         base = providers.hosted_url().rstrip("/")
         dev = providers.device_id()
         try:
+            import asyncio
             async with httpx.AsyncClient(timeout=4) as c:
-                s = (await c.get(f"{base}/api/status")).json()
+                sr, ur = await asyncio.gather(
+                    c.get(f"{base}/api/status"),
+                    c.get(f"{base}/api/usage", params={"device": dev}),
+                )
+                s, u = sr.json(), ur.json()
                 out["backend"] = s.get("backend", "fireworks")
                 out["accelerator"] = s.get("accelerator")
                 out["model"] = s.get("model")
-                u = (await c.get(f"{base}/api/usage", params={"device": dev})).json()
                 out["trial_remaining"] = u.get("remaining_usd")
                 out["trial_usd"] = u.get("trial_usd")
                 # AMD is free; only Fireworks spends the trial.
