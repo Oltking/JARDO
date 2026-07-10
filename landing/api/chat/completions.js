@@ -102,24 +102,14 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // Trial + global caps checked before spending.
+  // The caps only gate PAID Fireworks compute. AMD (self-hosted) is free, so it
+  // keeps serving even after the trial is spent — Gemma-on-AMD is effectively
+  // unlimited; only the Fireworks fallback is capped.
   const spent = await getSpend(device);
-  if (spent >= FREE_TRIAL_USD) {
-    res.status(402).json({
-      error: "trial_exhausted",
-      message:
-        "Your free Jardo trial compute is used up. Add your own Fireworks or AMD " +
-        "Developer Cloud key in Settings → Providers for cloud inference, or keep " +
-        "using Jardo locally with Ollama.",
-      trial_usd: FREE_TRIAL_USD,
-      spent_usd: Number(spent.toFixed(4)),
-    });
-    return;
-  }
-  if (GLOBAL_CAP_USD != null && (await globalSpend()) >= GLOBAL_CAP_USD) {
-    res.status(503).json({ error: "capacity", message: "Free trial capacity reached, try later." });
-    return;
-  }
+  const trialExhausted = spent >= FREE_TRIAL_USD;
+  const globalCapped =
+    GLOBAL_CAP_USD != null && (await globalSpend()) >= GLOBAL_CAP_USD;
+  const fireworksBlocked = trialExhausted || globalCapped;
 
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
 
@@ -169,6 +159,23 @@ module.exports = async (req, res) => {
   if (text !== null) served = "amd";
 
   if (text === null) {
+    // Trial/global cap spent and AMD couldn't serve → the only remaining option is
+    // paid Fireworks, which is blocked. Tell the user (AMD would have been free).
+    if (fireworksBlocked) {
+      res.status(trialExhausted ? 402 : 503).json(
+        trialExhausted
+          ? {
+              error: "trial_exhausted",
+              message:
+                "Your free Jardo trial compute is used up. Add your own Fireworks " +
+                "or AMD Developer Cloud key in Settings → Providers, or keep using " +
+                "Jardo locally with Ollama.",
+              trial_usd: FREE_TRIAL_USD,
+              spent_usd: Number(spent.toFixed(4)),
+            }
+          : { error: "capacity", message: "Free trial capacity reached, try later." });
+      return;
+    }
     const requested = body.model || FALLBACK_MODEL;
     const tried = new Set();
     for (const model of [requested, FALLBACK_MODEL]) {
