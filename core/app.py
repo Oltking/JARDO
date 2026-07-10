@@ -948,10 +948,11 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
 
     chosen = providers.configured()[0]
     model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+    brief = await _project_brief(session, active)
     try:
         client = providers.make_client(chosen, timeout=30)
         result = await client.chat(providers.resolve_model(chosen, model),
-                                   build_messages(active.objective, tail),
+                                   build_messages(active.objective, tail, brief=brief),
                                    max_tokens=400, temperature=0.0, reasoning_effort="low")
         obs = parse_observation(result.content)
         app.state.observe_digest = digest
@@ -986,6 +987,30 @@ _AGENT_MARKERS = (
     "tokens", "context left", "do you want", "proceed?",
 )
 _SHELL_PROMPT = re.compile(r"[\$%#❯➜]\s*$")
+
+
+async def _project_brief(session, active) -> str:
+    """The supervised project's brief (goal + CLAUDE.md + progress), cached with a
+    short TTL so the supervisor reasons with full context without rebuilding git
+    state on every beat."""
+    import time
+
+    from core.projects import ProjectStore
+    from core.supervision import build_project_brief
+
+    cache = getattr(app.state, "brief_cache", None)
+    now = time.time()
+    if cache and now - cache[1] < 25:
+        return cache[0]
+    path = None
+    try:
+        proj = await ProjectStore(session).get_active(active.owner_id)
+        path = proj.path if proj else None
+    except Exception:  # noqa: BLE001
+        path = None
+    brief = build_project_brief(path, active.objective)
+    app.state.brief_cache = (brief, now)
+    return brief
 
 
 def _agent_exited(screen: str, agent: str) -> bool:
@@ -1087,8 +1112,10 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     else:
         chat_fn = _align if (providers.configured()
                              or await app.state.ollama.is_up()) else None
+        brief = await _project_brief(session, active)
         decision = await autonomous_decision(session, prompt.action, active.objective,
-                                             chat_fn=chat_fn, conservative=True)
+                                             chat_fn=chat_fn, conservative=True,
+                                             brief=brief)
     pressed = False
     needs_accessibility = False
     try:
@@ -1113,7 +1140,11 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
         import asyncio
 
         from core.supervision import decline_guidance
-        guidance = decline_guidance(prompt.action, decision.reason, active.objective)
+        # Prefer the model's concrete, project-aware "do this instead" guidance;
+        # fall back to the generic redirect only when it didn't give one.
+        guidance = (decision.guidance.strip() if decision.guidance.strip()
+                    else decline_guidance(prompt.action, decision.reason,
+                                          active.objective))
         await asyncio.sleep(0.7)  # let the agent render its follow-up input
         try:
             terminal_watch.type_text(guidance, window_id)

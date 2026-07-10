@@ -48,11 +48,13 @@ Schema: {"state": ..., "activity": "", "last_command": "", "issue": "",
 "progress": "", "context": "ok", "note": ""}"""
 
 
-def build_messages(goal: str, output: str) -> list[dict]:
+def build_messages(goal: str, output: str, brief: str = "") -> list[dict]:
+    ctx = f"\n\nProject context:\n{brief[:1800]}" if brief else ""
     return [
         {"role": "system", "content": SYSTEM},
         {"role": "user",
-         "content": f"Goal: {goal or '(none stated)'}\n\nRecent output:\n{output[-2500:]}"},
+         "content": f"Goal: {goal or '(none stated)'}{ctx}"
+                    f"\n\nRecent output:\n{output[-2500:]}"},
     ]
 
 
