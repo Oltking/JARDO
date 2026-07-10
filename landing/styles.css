@@ -285,6 +285,12 @@ section { position: relative; }
 .download__inner { max-width: 720px; margin: 0 auto; }
 .download__mark { width: 64px; height: 64px; border-radius: 14px; margin-bottom: 2rem; }
 .download__sub { color: var(--ink-dim); font-size: 1.15rem; margin: 1.4rem auto 2.6rem; max-width: 46ch; }
+.download__install { max-width: 40rem; margin: 0 auto 1.6rem; }
+.download__install-label { color: var(--ink-dim); font-size: 0.82rem; margin: 0 0 0.6rem; }
+.download__cmd { display: flex; align-items: stretch; gap: 0; border: 1px solid var(--line, rgba(255,255,255,0.14)); border-radius: 10px; overflow: hidden; background: rgba(0,0,0,0.35); }
+.download__cmd code { flex: 1; padding: 0.85rem 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; text-align: left; white-space: nowrap; overflow-x: auto; color: var(--ink, #eee); }
+.copy-btn { flex: 0 0 auto; border: none; border-left: 1px solid var(--line, rgba(255,255,255,0.14)); background: rgba(255,255,255,0.06); color: var(--ink, #eee); padding: 0 1.1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+.copy-btn:hover { background: rgba(255,255,255,0.12); }
 .download__actions { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; margin-bottom: 2rem; }
 .download__fine { color: var(--faint); font-size: 0.86rem; max-width: 48ch; margin: 0 auto; }
 .download__fine strong { color: var(--muted); }

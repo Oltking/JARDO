@@ -10,6 +10,22 @@
   const y = document.getElementById("year");
   if (y) y.textContent = new Date().getFullYear();
 
+  /* copy the install command ------------------------------------ */
+  const copyBtn = document.getElementById("copy-install");
+  const cmdEl = document.getElementById("install-cmd");
+  if (copyBtn && cmdEl) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(cmdEl.textContent.trim());
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = "Copied";
+        setTimeout(() => (copyBtn.textContent = prev), 1600);
+      } catch {
+        /* clipboard blocked — the command is still visible to select */
+      }
+    });
+  }
+
   /* nav: solidify after scrolling past the fold ----------------- */
   const nav = document.getElementById("nav");
   const onScroll = () => nav.classList.toggle("is-stuck", window.scrollY > 24);

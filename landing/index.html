@@ -323,22 +323,29 @@
         <img src="assets/jardo-logo.png" alt="" class="download__mark" />
         <h2>Bring one home.</h2>
         <p class="download__sub">
-          One double-click. No Docker, no database, no API key. The whole engine ships
+          One command. No Docker, no database, no API key. The whole engine ships
           inside the app, and your first $1 of AI is on us.
         </p>
+        <div class="download__install">
+          <p class="download__install-label">Recommended — paste in Terminal. Installs clean, no Gatekeeper warning:</p>
+          <div class="download__cmd">
+            <code id="install-cmd">curl -fsSL https://jardo.vercel.app/install.sh | bash</code>
+            <button class="copy-btn" id="copy-install" type="button">Copy</button>
+          </div>
+        </div>
         <div class="download__actions">
-          <a class="btn btn--solid btn--lg magnetic" id="dl-mac" href="https://github.com/Oltking/JARDO/releases/download/v1.0.0/Jardo_0.1.0_aarch64.dmg">
-            <span>Download for macOS</span>
+          <a class="btn btn--ghost btn--lg magnetic" id="dl-mac" href="https://github.com/Oltking/JARDO/releases/download/v1.0.0/Jardo_0.1.0_aarch64.dmg">
+            <span>Or download the .dmg</span>
             <span class="btn__tag">Beta</span>
           </a>
           <span class="btn btn--disabled btn--lg">Windows, coming soon</span>
         </div>
         <p class="download__fine">
-          Unsigned early build. After downloading, <strong>right-click Jardo → Open</strong> to get past Gatekeeper.
-          If macOS says it is "damaged," that is just the browser quarantine flag on an unsigned app, not a real problem.
-          Clear it once in Terminal with
-          <code>xattr -dr com.apple.quarantine ~/Downloads/Jardo_0.1.0_aarch64.dmg</code>,
-          then open it. Use the included trial compute first; adding your own model key in Settings is optional.
+          The install command uses <code>curl</code>, so macOS never quarantines it and Jardo just opens.
+          If you download the .dmg in a browser instead and macOS says it is "damaged," that is only the
+          browser quarantine flag on an unsigned app, not a real problem: clear it once with
+          <code>xattr -dr com.apple.quarantine ~/Downloads/Jardo_0.1.0_aarch64.dmg</code>, or right-click Jardo → Open.
+          Use the included trial compute first; adding your own model key in Settings is optional.
         </p>
       </div>
     </section>
