@@ -11,7 +11,13 @@ module.exports = async (req, res) => {
         headers: AMD_API_KEY ? { Authorization: `Bearer ${AMD_API_KEY}` } : {},
         signal: AbortSignal.timeout(4000),
       });
-      amdUp = r.ok;
+      // Must be an actual OpenAI-style models list — not a Jupyter/HTML page from a
+      // misconfigured URL. A 200 that returns HTML (login/notebook) is NOT "online".
+      const ct = r.headers.get("content-type") || "";
+      if (r.ok && ct.includes("application/json")) {
+        const j = await r.json().catch(() => null);
+        amdUp = Boolean(j && (Array.isArray(j.data) || j.object === "list"));
+      }
     } catch {
       amdUp = false;
     }
