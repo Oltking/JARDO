@@ -39,27 +39,26 @@ export default function App() {
   const [coreReady, setCoreReady] = useState(false);
 
   const [wiping, setWiping] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+  const [wipeError, setWipeError] = useState<string | null>(null);
 
   const onBriefingDone = useCallback(() => setBriefingDone(true), []);
 
   // Delete-my-data: wipe profile + memory on this Mac and drop straight back to
-  // first-run onboarding, as if freshly installed. Confirmed before it runs.
-  const onWipe = useCallback(async () => {
-    const ok = window.confirm(
-      "Delete your profile and everything Jardo remembers on this Mac? " +
-        "This clears your name, conversations, memory, saved keys, and trial id. " +
-        "It cannot be undone."
-    );
-    if (!ok) return;
+  // first-run onboarding, as if freshly installed. Confirmed in an in-app modal —
+  // window.confirm() is a no-op inside the Tauri webview, so we roll our own.
+  const doWipe = useCallback(async () => {
     setWiping(true);
+    setWipeError(null);
     try {
       await resetAccount();
       // Back to a clean first-run without needing a restart.
+      setConfirmWipe(false);
       setBriefingDone(false);
       setDrawer(false);
       setOnboarded(false);
     } catch {
-      window.alert("Couldn't delete your data. Please try again.");
+      setWipeError("Couldn't delete your data. Please try again.");
     } finally {
       setWiping(false);
     }
@@ -181,14 +180,49 @@ export default function App() {
               {panel === "reports" && <Reports />}
             </div>
             <div className="drawer-danger">
-              <button className="wipe-btn" onClick={onWipe} disabled={wiping}>
-                {wiping ? "Deleting…" : "Delete my profile & memory"}
+              <button
+                className="wipe-btn"
+                onClick={() => {
+                  setWipeError(null);
+                  setConfirmWipe(true);
+                }}
+                disabled={wiping}
+              >
+                Delete my profile & memory
               </button>
               <p className="wipe-note">
                 Erases everything Jardo knows about you on this Mac and starts over.
               </p>
             </div>
           </aside>
+        </div>
+      )}
+
+      {confirmWipe && (
+        <div
+          className="confirm-scrim"
+          onClick={() => !wiping && setConfirmWipe(false)}
+        >
+          <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete everything?</h2>
+            <p>
+              This clears your name, conversations, memory, saved keys, and trial
+              id on this Mac, and starts Jardo over from scratch. It can’t be undone.
+            </p>
+            {wipeError && <p className="confirm-error">{wipeError}</p>}
+            <div className="confirm-actions">
+              <button
+                className="link-btn"
+                onClick={() => setConfirmWipe(false)}
+                disabled={wiping}
+              >
+                Cancel
+              </button>
+              <button className="wipe-btn" onClick={doWipe} disabled={wiping}>
+                {wiping ? "Deleting…" : "Delete everything"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
         </>

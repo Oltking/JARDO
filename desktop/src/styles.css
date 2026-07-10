@@ -964,6 +964,13 @@ code {
 .wipe-btn:hover:not(:disabled) { background: rgba(220, 60, 60, 0.16); }
 .wipe-btn:disabled { opacity: 0.6; cursor: default; }
 .wipe-note { margin: 8px 2px 0; font-size: 11px; color: var(--faint); }
+.confirm-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; z-index: 60; }
+.confirm-box { width: min(380px, 88vw); background: var(--panel, #14141a); border: 1px solid var(--line-soft); border-radius: 14px; padding: 22px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
+.confirm-box h2 { margin: 0 0 8px; font-size: 16px; color: var(--text); }
+.confirm-box p { margin: 0 0 12px; font-size: 13px; line-height: 1.5; color: var(--dim); }
+.confirm-error { color: #e5484d !important; }
+.confirm-actions { display: flex; align-items: center; justify-content: flex-end; gap: 14px; margin-top: 6px; }
+.confirm-actions .wipe-btn { width: auto; padding: 8px 16px; }
 .link-btn { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 12px; text-decoration: underline; }
 .link-btn:hover { color: var(--text); }
 
