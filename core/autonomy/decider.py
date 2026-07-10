@@ -24,11 +24,12 @@ class Decision:
     approve: bool
     reason: str
     severity: str
+    guidance: str = ""  # expert "do this instead" text when declining
 
 
 async def autonomous_decision(session: AsyncSession, command: str, objective: str,
                               chat_fn=None, totp_code: str | None = None,
-                              conservative: bool = False) -> Decision:
+                              conservative: bool = False, brief: str = "") -> Decision:
     request = ActionRequest("jardo", "shell.run", command, objective or "")
 
     # 1. Safety — refuse anything risky for unattended execution.
@@ -52,20 +53,38 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
         return Decision(False, f"unsafe to run unattended: {worst.message}{suffix}",
                         str(worst.severity))
 
-    # 1b. Conservative posture for unattended auto-approval (audit #1): a denylist
-    # can't catch every destructive command, so only auto-approve commands we
-    # positively recognize as safe. Everything else is declined (never run) — the
-    # owner can run it themselves.
+    # The command cleared the hard safety scan (no MEDIUM+ danger). Now judge it
+    # with understanding, not a keyword list. A capable model reads the project
+    # brief + progress and decides, as an expert supervisor, whether this action
+    # is safe and moves toward the goal — approving normal engineering work and
+    # declining only genuine missteps, with concrete guidance to redirect.
+    if chat_fn is not None:
+        from core.supervision import judge_action
+        j = await judge_action(objective, brief, f"run in terminal: {command}",
+                               chat_fn=chat_fn)
+        if j.judged_by == "model":
+            if j.approve:
+                return Decision(True, j.reason or "safe and on-task", "low")
+            return Decision(False, j.reason or "off-task or unsafe for the goal",
+                            "low", guidance=j.guidance)
+        # else: model unavailable/failed → fall through to the conservative floor.
+
+    # Conservative floor when NO model is available to reason (audit #1): a
+    # denylist can't catch every destructive command, so without a model to judge
+    # we only auto-approve what we positively recognize as safe; anything else is
+    # declined so the owner can run it themselves.
     if conservative:
         from core import appsettings
         from core.sentinel.checks import is_recognizably_safe
         learned = frozenset(appsettings.get("allowed_programs", []) or [])
         if not is_recognizably_safe(command, learned):
-            return Decision(False, "not a recognizably-safe command — declined for "
-                            "safety while acting unattended; run it yourself, or add "
-                            "it with 'jardo allow'", "low")
+            return Decision(False, "no model available to judge this and it isn't a "
+                            "recognizably-safe command — declined while acting "
+                            "unattended; run it yourself, or add it with 'jardo allow'",
+                            "low")
 
-    # 2. Purpose — must serve the owner's objective (if one is set).
+    # No model, but recognizably safe (or not conservative): fall back to lexical
+    # alignment against the objective.
     if objective and objective.strip():
         from core.supervision import judge_alignment
         alignment = await judge_alignment(

@@ -66,6 +66,120 @@ class Alignment:
     judged_by: str  # "model" | "heuristic"
 
 
+@dataclass
+class ActionJudgment:
+    approve: bool
+    reason: str
+    guidance: str  # what to do instead, when declining
+    judged_by: str  # "model" | "heuristic"
+
+
+def build_project_brief(path: str | None, objective: str) -> str:
+    """A compact briefing of WHAT is being built and HOW FAR it has come, so the
+    supervisor judges each action with real understanding rather than keyword
+    matching. Reads the agent's brief (CLAUDE.md / GEMINI.md), git progress, and
+    the agent's own session notes. Best-effort — never raises."""
+    lines: list[str] = []
+    if objective and objective.strip():
+        lines.append(f"Owner's goal: {objective.strip()}")
+    if not path:
+        return "\n".join(lines) or "(no project context available)"
+    try:
+        from core.projects import inspect_project
+        st = inspect_project(path, goal=objective)
+    except Exception:  # noqa: BLE001
+        return "\n".join(lines) or "(no project context available)"
+
+    lines.append(f"Project: {st.name} ({st.path})")
+
+    # The brief the agent was seeded with — the source of truth for scope.
+    import os
+    for fname in ("CLAUDE.md", "GEMINI.md", "SPEC.md"):
+        fp = os.path.join(st.path, fname)
+        if os.path.isfile(fp):
+            try:
+                with open(fp, encoding="utf-8", errors="replace") as f:
+                    text = f.read().strip()
+                if text:
+                    lines.append(f"\n--- {fname} (project brief) ---\n{text[:1500]}")
+            except OSError:
+                pass
+
+    # Progress signals: what has actually been done so far.
+    prog: list[str] = []
+    if st.branch:
+        prog.append(f"branch {st.branch}")
+    if st.recent_commits:
+        prog.append("recent commits: "
+                    + "; ".join(c.split(" ", 1)[-1] for c in st.recent_commits[:5]))
+    if st.uncommitted or st.untracked:
+        prog.append(f"{st.uncommitted} changed / {st.untracked} new file(s) uncommitted")
+    if st.agent and getattr(st.agent, "summary", None):
+        prog.append(f"agent notes: {st.agent.summary}")
+    if st.agent and getattr(st.agent, "last_prompt", None):
+        prog.append(f"last focus: {st.agent.last_prompt}")
+    if prog:
+        lines.append("\nProgress so far: " + " | ".join(prog))
+    return "\n".join(lines)
+
+
+_JUDGE_PROMPT = """\
+You are Jardo, an expert engineering supervisor overseeing a coding agent (Claude
+Code / Gemini CLI) working toward the owner's goal. You understand the project and
+how far it has come. Judge the agent's proposed next action with that knowledge.
+
+APPROVE when the action is safe AND moves the project toward completing the goal.
+Normal engineering work is expected and should be approved even if it does not
+literally echo the goal: installing dependencies, creating/editing project files,
+running tests or builds, starting dev servers, git add/commit, scaffolding,
+refactoring, reading files, searching the codebase.
+
+DECLINE only when the action is genuinely unsafe (destructive, deletes work,
+touches secrets/credentials, acts outside this project, force-pushes over shared
+history) OR is a clear wrong turn that does not serve the goal. When you decline,
+give precise, expert guidance for what the agent should do instead to stay safe
+and reach the goal, grounded in where the project currently is.
+
+{brief}
+
+AGENT'S PROPOSED ACTION:
+{action}
+
+Reply with ONLY a JSON object:
+{{"decision": "APPROVE" or "DECLINE", "reason": "<one concise expert sentence>", "guidance": "<if DECLINE, what to do instead; else empty>"}}"""
+
+
+async def judge_action(objective: str, brief: str, action: str,
+                       chat_fn=None) -> ActionJudgment:
+    """Expert, context-aware judgment of a single proposed action. Uses the model
+    with the full project brief so the decision reflects understanding, not keyword
+    overlap. Falls back to the lexical heuristic only when no model is available."""
+    if chat_fn is not None:
+        try:
+            import json
+
+            from core.sentinel.checks import redact
+            raw = await chat_fn(_JUDGE_PROMPT.format(
+                brief=redact(brief)[:4000], action=redact(action)[:800]))
+            match = re.search(r"\{.*\}", raw, re.S)
+            if match:
+                obj = json.loads(match.group(0))
+                decision = str(obj.get("decision", "")).upper()
+                reason = str(obj.get("reason", "")).strip()[:400]
+                guidance = str(obj.get("guidance", "")).strip()[:600]
+                if "APPROVE" in decision:
+                    return ActionJudgment(True, reason or "safe and on-task", "", "model")
+                if "DECLINE" in decision:
+                    return ActionJudgment(
+                        False, reason or "off-task or unsafe for the goal",
+                        guidance, "model")
+        except Exception:  # noqa: BLE001 — model/parse error → heuristic
+            pass
+    # No model (or it failed): fall back to the conservative lexical check.
+    align = _heuristic_alignment(objective, action)
+    return ActionJudgment(align.aligned, align.reason, "", "heuristic")
+
+
 async def session_report(session: AsyncSession) -> dict:
     """What Jardo did while supervising — the away-mode payoff. Built from the
     append-only audit log (terminal.answered events), so the owner returns to a
