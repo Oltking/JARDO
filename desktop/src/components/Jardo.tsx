@@ -5,6 +5,8 @@ import {
   chooseProject,
   getIdentity,
   getProviders,
+  openPrivacySettings,
+  requestAccessibility,
   routeIntent,
   sendChat,
   type RoutedIntent,
@@ -637,6 +639,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   // ---- terminal supervision -------------------------------------------------
   async function startSupervising(intent: Supervising, spoken: boolean) {
     setPhase("thinking");
+    // Pressing answers into the agent's terminal needs Accessibility. Trigger the
+    // macOS prompt now (adds Jardo to the allowlist) so the grant is in place
+    // before the first prompt appears, instead of failing mid-supervision.
+    void requestAccessibility();
     try {
       const res = await terminalSupervise(intent.goal, intent.agent);
       // The server keeps your real objective (from the briefing) over the raw
@@ -932,9 +938,20 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       )}
       {needsAccess && (
         <div className="banner warn" role="alert">
-          I can read your terminal but I'm blocked from pressing the answer. Grant
-          Jardo <strong>Accessibility</strong> in System Settings → Privacy &
-          Security → Accessibility, then I'll take it from there.
+          <span>
+            I can read your terminal but I'm blocked from pressing the answer. Grant
+            Jardo <strong>Accessibility</strong>, then I'll take it from there.
+          </span>
+          <button
+            className="link-btn"
+            onClick={async () => {
+              const ok = await requestAccessibility();
+              if (ok) setNeedsAccess(false);
+              else await openPrivacySettings("Accessibility");
+            }}
+          >
+            grant access
+          </button>
         </div>
       )}
       {error && (

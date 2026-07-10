@@ -176,6 +176,25 @@ export async function setIdentity(
   }
 }
 
+// Ask macOS for Accessibility trust (shows the system prompt if not yet trusted)
+// so Jardo can press answers into the agent's terminal. Returns current trust.
+export async function requestAccessibility(): Promise<boolean> {
+  try {
+    return await invoke<boolean>("request_accessibility");
+  } catch {
+    return false;
+  }
+}
+
+// Open a Privacy pane: "Accessibility" | "Automation" | "Microphone".
+export async function openPrivacySettings(pane: string): Promise<void> {
+  try {
+    await invoke("open_privacy_settings", { pane });
+  } catch {
+    /* best-effort */
+  }
+}
+
 // Wipe this device's profile + memory (delete-my-data). Returns to first-run.
 export async function resetAccount(): Promise<void> {
   try {

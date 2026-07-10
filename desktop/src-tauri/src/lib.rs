@@ -343,6 +343,44 @@ async fn set_identity(
     parse_json(resp).await
 }
 
+/// Ask macOS for Accessibility trust, showing the system prompt if we're not yet
+/// trusted. Jardo presses answers into the agent's terminal via System Events,
+/// which requires this. Returns whether the app is currently trusted. Because the
+/// app is ad-hoc signed, each rebuild is a "new" app to TCC, so this may need to
+/// be granted again after an update.
+#[tauri::command]
+fn request_accessibility() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos_accessibility_client::accessibility::application_is_trusted_with_prompt()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
+}
+
+/// Open a specific Privacy & Security pane so the user can grant a permission
+/// directly. `pane` is one of "Accessibility", "Automation", "Microphone".
+#[tauri::command]
+fn open_privacy_settings(pane: String) {
+    #[cfg(target_os = "macos")]
+    {
+        let anchor = match pane.as_str() {
+            "Automation" => "Privacy_Automation",
+            "Microphone" => "Privacy_Microphone",
+            _ => "Privacy_Accessibility",
+        };
+        let _ = std::process::Command::new("open")
+            .arg(format!(
+                "x-apple.systempreferences:com.apple.preference.security?{anchor}"
+            ))
+            .spawn();
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = pane;
+}
+
 #[tauri::command]
 async fn reset_account() -> Result<serde_json::Value, ApiError> {
     let resp = client()?
@@ -834,6 +872,8 @@ pub fn run() {
             get_identity,
             set_identity,
             reset_account,
+            request_accessibility,
+            open_privacy_settings,
             get_projects,
             get_projects_root,
             set_projects_root,

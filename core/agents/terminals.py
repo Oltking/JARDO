@@ -87,8 +87,13 @@ class TerminalApp(TerminalDriver):
             _osa(f'tell application "Terminal" to do script "{_esc(text)}" '
                  f'in {self._target(window_id)}')
             return
-        except RuntimeError:
-            pass
+        except RuntimeError as exc:
+            # Fall back to synthetic keystrokes (needs Accessibility). Log why the
+            # Automation path failed so a denied/erroring do-script is diagnosable
+            # rather than silently degrading.
+            import logging
+            logging.getLogger("jardo.terminal").info(
+                "do-script press failed, trying keystrokes: %s", exc)
         lines = ['tell application "Terminal" to activate',
                  f'tell application "System Events" to keystroke "{_esc(text)}"']
         if submit:

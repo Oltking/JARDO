@@ -26,6 +26,12 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 log = "0.4"
 
+# macOS Accessibility (AXIsProcessTrustedWithOptions) so we can trigger the
+# system prompt and add Jardo to the Accessibility allowlist — required to press
+# answers into a coding agent's terminal prompt.
+[target.'cfg(target_os = "macos")'.dependencies]
+macos-accessibility-client = "0.0.1"
+
 [features]
 # Used to enable the Tauri dev-tools in debug builds.
 default = []
