@@ -25,8 +25,26 @@ cd desktop
 echo "==> Installing frontend deps"
 pnpm install
 
-echo "==> Building frontend + Tauri bundle (targets: app, dmg)"
-pnpm tauri build
+# Two-phase so we can deep-sign the .app (including the Python core sidecar)
+# BEFORE the DMG is packaged. Tauri signs its own binary with the entitlements,
+# but the sidecar under Resources/ is what actually opens the microphone, and it
+# must carry the audio-input entitlement too or macOS feeds it silence.
+echo "==> Building the .app bundle"
+pnpm tauri build --bundles app
+
+APP="src-tauri/target/release/bundle/macos/Jardo.app"
+ENT="src-tauri/Entitlements.plist"
+echo "==> Deep-signing $APP (ad-hoc) with mic/apple-events entitlements"
+# --deep re-signs every nested dylib and the sidecar; --options runtime keeps the
+# hardened runtime so the entitlements take effect; ad-hoc identity ("-").
+codesign --force --deep --options runtime --entitlements "$ENT" --sign - "$APP"
+echo "==> Verifying the audio-input entitlement made it into the bundle"
+codesign -d --entitlements :- "$APP" 2>/dev/null | grep -q "audio-input" \
+  && echo "    ok: com.apple.security.device.audio-input present" \
+  || echo "    WARNING: audio-input entitlement missing — mic will stay silent"
+
+echo "==> Packaging the DMG from the signed .app"
+pnpm tauri build --bundles dmg
 
 DMG_DIR="src-tauri/target/release/bundle/dmg"
 echo ""
