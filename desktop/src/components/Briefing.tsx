@@ -53,6 +53,12 @@ export function Briefing({ onDone }: { onDone: (goal?: string) => void }) {
     try {
       const heard = await voiceTranscribe(6);
       if (doneRef.current) return; // skipped/submitted while we were recording
+      // First run: the speech model is still downloading — say so plainly instead
+      // of "I didn't catch that" (which wrongly implies it heard nothing).
+      if (heard.model_pending) {
+        setError("My voice is still setting up (one-time download). Type your goal below, and I'll speak once it's ready.");
+        return;
+      }
       const g = (heard.transcript || "").trim();
       if (heard.heard && g.length >= 3) {
         setGoal(g);

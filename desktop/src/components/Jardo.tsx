@@ -968,8 +968,8 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
 
       {needsSetup && (
         <div className="banner warn" role="alert">
-          Jardo isn't set up yet. Reopen the app to finish the quick setup, or set
-          your name in Settings.
+          Jardo isn't set up yet. Open <strong>⋯ → Providers</strong> and set your
+          name to finish.
         </div>
       )}
       {noKey && !needsSetup && (
