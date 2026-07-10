@@ -686,7 +686,15 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
       try {
         const r = await terminalTick();
         if (!r.watching) {
+          const agent = superRef.current?.agent || "the agent";
           stopSupervising();
+          if (r.ended) {
+            const line = r.ended_reason
+              ? `Looks like ${r.ended_reason}, so I've stopped watching.`
+              : `${agent} stopped, so I've stopped watching.`;
+            say("jardo", line);
+            void speak(line);
+          }
           return;
         }
         if (r.needs_accessibility) {

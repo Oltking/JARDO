@@ -5,6 +5,7 @@ persist user msg → persona prompt (identity + facts) → Fireworks → persist
 → enqueue fact-extraction job on the Arq queue → respond.
 """
 
+import re
 import uuid
 from contextlib import asynccontextmanager
 
@@ -974,6 +975,29 @@ async def terminal_observe(session: AsyncSession = Depends(get_session)) -> dict
         return {"state": "unknown"}
 
 
+# Coding-agent TUIs (Claude Code, Gemini) render recognisable chrome while alive:
+# an input box, a "for shortcuts" hint, "esc to interrupt", etc. When the agent
+# exits (Ctrl-C or /exit) the window drops back to a bare shell prompt with none
+# of that. We use the absence of any agent marker PLUS a shell-prompt-looking last
+# line to spot an exit (debounced by the caller to avoid false positives).
+_AGENT_MARKERS = (
+    "esc to interrupt", "for shortcuts", "? for shortcuts", "auto-accept",
+    "bypass permissions", "│ >", "╭─", "claude", "gemini",
+    "tokens", "context left", "do you want", "proceed?",
+)
+_SHELL_PROMPT = re.compile(r"[\$%#❯➜]\s*$")
+
+
+def _agent_exited(screen: str, agent: str) -> bool:
+    lines = [ln.rstrip() for ln in screen.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    low = "\n".join(lines[-12:]).lower()
+    if any(m in low for m in _AGENT_MARKERS):
+        return False  # agent UI still on screen → still running
+    return bool(_SHELL_PROMPT.search(lines[-1]))
+
+
 @app.post("/terminal/tick")
 async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     """One supervision beat: read the terminal, and if the agent is waiting on a
@@ -991,11 +1015,34 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     if active is None:
         return {"watching": False}
 
+    from core.supervision import end_active
+
     window_id = getattr(app.state, "supervise_window_id", None)
+
+    async def _finish(reason: str) -> dict:
+        app.state.exit_streak = 0
+        await end_active(session, active.owner_id)
+        await session.commit()
+        return {"watching": False, "ended": True, "ended_reason": reason}
+
+    # The owner closed the supervised window → supervision is over, cleanly.
+    if not terminal_watch.window_exists(window_id):
+        return await _finish("the terminal window was closed")
+
     try:
         screen = terminal_watch.read_terminal(window_id)
     except Exception as exc:  # noqa: BLE001
         return {"watching": True, "readable": False, "detail": str(exc)}
+
+    # The owner stopped the agent (Ctrl-C or /exit) and it dropped back to a bare
+    # shell prompt. Debounced over two beats so a momentary prompt between steps
+    # doesn't look like an exit.
+    if _agent_exited(screen, active.agent):
+        app.state.exit_streak = getattr(app.state, "exit_streak", 0) + 1
+        if app.state.exit_streak >= 2:
+            return await _finish(f"{active.agent} is no longer running")
+    else:
+        app.state.exit_streak = 0
 
     tail = "\n".join(screen.splitlines()[-6:]).strip()
     prompt = terminal_watch.detect_permission_prompt(screen)

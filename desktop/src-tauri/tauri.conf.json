@@ -44,7 +44,7 @@
     "longDescription": "Jardo desktop shell: chat with the core, review Permission Broker escalations, and a global kill-switch. Talks to the local core at 127.0.0.1:8000.",
     "macOS": {
       "minimumSystemVersion": "10.15",
-      "signingIdentity": "-",
+      "signingIdentity": "Jardo Dev",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
       "dmg": {

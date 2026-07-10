@@ -185,6 +185,11 @@ def is_frontmost(window_id) -> bool:
     return d.is_frontmost(window_id) if d else False
 
 
+def window_exists(window_id) -> bool:
+    d = _driver()
+    return d.window_exists(window_id) if d else True
+
+
 def open_interactive(shell_command: str):
     d = _driver()
     return d.open(shell_command) if d else None

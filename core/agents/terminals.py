@@ -52,6 +52,7 @@ class TerminalDriver:
     def is_frontmost(self, window_id) -> bool: return False
     def send_keys(self, text: str, submit: bool, window_id=None) -> None: ...
     def open(self, shell_command: str): return None
+    def window_exists(self, window_id) -> bool: return True
 
 
 class TerminalApp(TerminalDriver):
@@ -77,6 +78,17 @@ class TerminalApp(TerminalDriver):
 
     def is_frontmost(self, window_id) -> bool:
         return window_id is not None and self.front_window() == window_id
+
+    def window_exists(self, window_id) -> bool:
+        # Supervision ends if the owner closes the window. None → we pinned to the
+        # front window; treat "any window open" as still-present.
+        try:
+            if window_id is None:
+                return int(_osa('tell application "Terminal" to count windows').strip()) > 0
+            ids = _osa('tell application "Terminal" to get id of every window')
+            return str(window_id) in ids
+        except RuntimeError:
+            return True  # couldn't tell (transient) — don't kill supervision on a blip
 
     def send_keys(self, text: str, submit: bool, window_id=None) -> None:
         # Preferred: Terminal's own Apple Events (Automation) — types into the
