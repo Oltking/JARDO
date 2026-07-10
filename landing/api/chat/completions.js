@@ -113,9 +113,14 @@ module.exports = async (req, res) => {
 
   const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
 
+  let amdNote = "not-tried"; // surfaced as x-jardo-amd-note for diagnosing fallbacks
+
   // One place to call the AMD droplet (Gemma on ROCm) — free, so it's tried first.
   async function callAmd() {
-    if (!AMD_BASE_URL) return null;
+    if (!AMD_BASE_URL) {
+      amdNote = "not-configured";
+      return null;
+    }
     try {
       const amdBody = AMD_MODEL ? { ...body, model: AMD_MODEL } : body;
       const r = await fetch(`${AMD_BASE_URL}/chat/completions`, {
@@ -127,8 +132,16 @@ module.exports = async (req, res) => {
         body: JSON.stringify(amdBody),
         signal: AbortSignal.timeout(55000), // transformers is slower than vLLM; stay under Vercel's 60s
       });
-      return r.ok ? await r.text() : null;
-    } catch {
+      if (r.ok) {
+        amdNote = "ok";
+        return await r.text();
+      }
+      // Capture WHY AMD refused (e.g. served-model-name mismatch → 404) so the
+      // fallback is diagnosable via the x-jardo-amd-note header instead of silent.
+      amdNote = `http ${r.status}: ${(await r.text()).slice(0, 160)}`;
+      return null;
+    } catch (e) {
+      amdNote = `error: ${String(e).slice(0, 160)}`;
       return null; // droplet down/slow → caller falls through
     }
   }
@@ -203,6 +216,7 @@ module.exports = async (req, res) => {
   }
 
   res.setHeader("x-jardo-served-by", served);
+  res.setHeader("x-jardo-amd-note", amdNote);
   res.setHeader("x-jardo-trial-usd", String(FREE_TRIAL_USD));
   // Meter only Fireworks usage. AMD self-hosted compute is free, so it does not
   // burn the trial (and it's the cheaper-tier cost story).
