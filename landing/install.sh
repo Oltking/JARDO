@@ -31,7 +31,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-say "Downloading Jardo ${VERSION} (no browser quarantine this way)…"
+say "Downloading Jardo (latest release — no browser quarantine this way)…"
 curl -fL --progress-bar "$URL" -o "$DMG"
 
 say "Mounting the disk image…"
