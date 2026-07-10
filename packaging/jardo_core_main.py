@@ -22,11 +22,12 @@ def main() -> None:
     # to point at your own deployment; set it empty to disable hosted mode.
     os.environ.setdefault("JARDO_PROXY_URL", "https://jardo.vercel.app")
 
-    # Run chat on Gemma (hackathon "Best Use of Gemma"). This is a Fireworks Gemma
-    # deployment; the proxy holds the key and (when the AMD droplet is up) serves it
-    # from AMD Instinct GPUs via ROCm/vLLM, falling back to Fireworks automatically.
-    os.environ.setdefault("JARDO_GEMMA_MODEL",
-                          "accounts/olamideoladiji/deployments/p4kjg4ws")
+    # Gemma (hackathon "Best Use of Gemma") is served by the AMD Instinct droplet
+    # via ROCm — the proxy tries AMD first and substitutes its own AMD_MODEL, so the
+    # app doesn't pin a Fireworks Gemma model here. The Fireworks FALLBACK uses the
+    # config default chat model (gpt-oss-120b), which is a live serverless model.
+    # (The old on-demand Fireworks Gemma deployment is retired: on-demand hours are
+    # spent, so it 404s and can't be depended on.)
 
     # When frozen, bundled model files (piper voice, whisper) live next to the
     # binary; expose that root so the app can resolve them.

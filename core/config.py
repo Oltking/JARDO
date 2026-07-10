@@ -84,10 +84,12 @@ class Settings(BaseSettings):
     amd_base_url: str = ""
     amd_model: str = "vllm-large"  # model id served by the vLLM endpoint
 
-    # Default chat model = proposed cheap tier (QUESTIONS.md Q4, pending eval
-    # validation in Phase 2). Model id format per
-    # docs/vendor/fireworks/querying-text-models.md ("accounts/<org>/models/<name>").
-    chat_model: str = "accounts/fireworks/models/gpt-oss-20b"
+    # Default chat model for the Fireworks fallback path. gpt-oss-120b is the
+    # strongest serverless model our account can actually serve (verified live) —
+    # good quality for the chief-of-staff chat. Gemma runs on the AMD droplet
+    # (served ahead of Fireworks by the proxy), so this is only the fallback.
+    # Model id format: docs/vendor/fireworks/querying-text-models.md.
+    chat_model: str = "accounts/fireworks/models/gpt-oss-120b"
     # Fact-extraction worker uses the same cheap tier until the router exists.
     extraction_model: str = "accounts/fireworks/models/gpt-oss-20b"
 
