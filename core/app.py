@@ -279,21 +279,28 @@ class IdentityRequest(BaseModel):
     name: str | None = None
     pronoun_style: str | None = None  # "sir" | "ma"
     email: str | None = None          # optional; a local placeholder is used if absent
+    language: str | None = None       # voice language code (i18n.LANGUAGES); "en" default
 
 
 @app.get("/settings/identity")
 async def get_identity(session: AsyncSession = Depends(get_session)) -> dict:
+    from core import i18n
     owner = await MemoryStore(session).get_owner()
     if owner is None:
-        return {"name": None, "pronoun_style": None}
-    return {"name": owner.name, "pronoun_style": owner.pronoun_style}
+        return {"name": None, "pronoun_style": None, "language": i18n.current()}
+    return {"name": owner.name, "pronoun_style": owner.pronoun_style,
+            "language": i18n.current()}
 
 
 @app.post("/settings/identity")
 async def set_identity(body: IdentityRequest,
                        session: AsyncSession = Depends(get_session)) -> dict:
+    from core import i18n
     store = MemoryStore(session)
     owner = await store.get_owner()
+    # Voice language is a device preference (kv store), independent of the owner row.
+    if body.language is not None:
+        i18n.set_language(body.language)
     if owner is None:
         # First-run onboarding, in-app (no CLI). A shipped user has no terminal,
         # so entering a name here creates the owner record + device keypair.
@@ -310,13 +317,55 @@ async def set_identity(body: IdentityRequest,
         owner = await create_owner(session, name, pronoun, email)
         await store.audit("app", "owner.created", {"owner_id": str(owner.id)})
         await session.commit()
-        return {"name": owner.name, "pronoun_style": owner.pronoun_style}
+        return {"name": owner.name, "pronoun_style": owner.pronoun_style,
+                "language": i18n.current()}
     if body.name and body.name.strip():
         owner.name = body.name.strip()[:120]
     if body.pronoun_style in ("sir", "ma"):
         owner.pronoun_style = body.pronoun_style
     await session.commit()
-    return {"name": owner.name, "pronoun_style": owner.pronoun_style}
+    return {"name": owner.name, "pronoun_style": owner.pronoun_style,
+            "language": i18n.current()}
+
+
+async def _model_chat(prompt: str, max_tokens: int = 700) -> str:
+    """A single chat-model call for utility tasks (translation). Prefers the hosted
+    provider (Gemma on AMD / Fireworks), falling back to a local Ollama model."""
+    from core.inference import providers
+    from core.router.router import RouterConfig
+
+    msgs = [{"role": "user", "content": prompt}]
+    if providers.configured():
+        chosen = providers.configured()[0]
+        model = RouterConfig.load().tiers.get("fireworks_cheap", "fireworks/gpt-oss-20b")
+        client = providers.make_client(chosen, timeout=30)
+        r = await client.chat(providers.resolve_model(chosen, model), msgs,
+                              max_tokens=max_tokens, temperature=0.0)
+        return r.content
+    r = await app.state.ollama.chat(
+        RouterConfig.load().tiers.get("ollama_local", "qwen2.5:0.5b"), msgs)
+    return r.content
+
+
+@app.get("/i18n/languages")
+async def i18n_languages() -> dict:
+    from core import i18n
+    return {"languages": i18n.catalog(), "current": i18n.current()}
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    to: str | None = None  # target language code; defaults to the current language
+
+
+@app.post("/i18n/translate")
+async def i18n_translate(body: TranslateRequest) -> dict:
+    """Translate text into the target (default: the user's chosen language). Used to
+    localize Jardo's English replies for display + speech."""
+    from core import i18n
+    target = i18n.normalize(body.to or i18n.current())
+    out = await i18n.translate(body.text, target, _model_chat)
+    return {"text": out, "language": target}
 
 
 @app.post("/settings/reset")
@@ -615,16 +664,16 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
         raise HTTPException(status_code=409, detail="voice extra not installed")
     import numpy as np
     from starlette.concurrency import run_in_threadpool
+    from core import i18n
     from core.voice import mic
-    from core.voice.stt import SpeechToText
 
-    if not hasattr(app.state, "stt"):
-        app.state.stt = SpeechToText(settings.voice_stt_model)
+    lang = i18n.current()
+    stt = _get_stt(lang)
 
     # First run: the speech model may still be downloading (~180 MB). Don't record
     # or block on the download here — answer instantly so the client can show the
     # "setting up voice" state instead of the request timing out.
-    if not app.state.stt.is_ready():
+    if not stt.is_ready():
         return {"transcript": "", "amplitude": 0.0, "heard": False,
                 "model_pending": True}
 
@@ -640,15 +689,44 @@ async def voice_transcribe(request: TranscribeRequest) -> dict:
         heard = bool(audio.size)
         amplitude = (float(np.abs(audio.astype(np.float32) / 32768.0).max())
                      if heard else 0.0)
-        transcript = await run_in_threadpool(app.state.stt.transcribe, audio) if heard else ""
+        native = await run_in_threadpool(stt.transcribe, audio) if heard else ""
     except Exception as exc:  # noqa: BLE001 — voice is best-effort, never fatal
         import logging
         logging.getLogger("jardo.voice").warning("transcribe failed: %s", exc)
         return {"transcript": "", "amplitude": 0.0, "heard": False,
                 "error": str(exc)[:200]}
+
+    # Non-English: transcribe in the user's language (shown as what they said), then
+    # translate to English so the English-tuned core logic works unchanged.
+    english = native
+    if native and lang != "en":
+        english = await i18n.to_english(native, lang, _model_chat)
+
     # heard=false means no speech within listen_timeout (silence) — callers use
-    # this to end an auto-listen session.
-    return {"transcript": transcript, "amplitude": round(amplitude, 4), "heard": heard}
+    # this to end an auto-listen session. `transcript` is English (for the core);
+    # `native` is what the user actually said (for the chat bubble).
+    return {"transcript": english, "native": native,
+            "amplitude": round(amplitude, 4), "heard": heard}
+
+
+def _get_stt(language: str):
+    """A cached SpeechToText per language. English uses the fast English-only model;
+    other languages use the multilingual model pinned to that language."""
+    from core import i18n
+    from core.voice.stt import SpeechToText
+
+    lang = i18n.normalize(language)
+    cache = getattr(app.state, "stt_by_lang", None)
+    if cache is None:
+        cache = app.state.stt_by_lang = {}
+    if lang not in cache:
+        if lang == "en":
+            cache[lang] = SpeechToText(settings.voice_stt_model)
+        else:
+            # Multilingual model (drop the ".en" suffix) pinned to the user's tongue.
+            base = settings.voice_stt_model.replace(".en", "") or "small"
+            cache[lang] = SpeechToText(base, language=i18n.whisper_lang(lang))
+    return cache[lang]
 
 
 class WakeRequest(BaseModel):
@@ -677,10 +755,17 @@ async def voice_say(request: SayRequest) -> dict:
     if not _voice_available():
         raise HTTPException(status_code=409, detail="voice extra not installed")
     from starlette.concurrency import run_in_threadpool
+    from core import i18n
     from core.voice.tts import get_tts
 
-    tts = get_tts(settings.voice_tts_backend, voice=settings.voice_tts_voice,
-                  model_path=settings.voice_piper_model)
+    lang = i18n.current()
+    if lang == "en":
+        tts = get_tts(settings.voice_tts_backend, voice=settings.voice_tts_voice,
+                      model_path=settings.voice_piper_model)
+    else:
+        # The bundled Piper voice is English-only; for other languages use macOS
+        # `say` with that language's native system voice.
+        tts = get_tts("say", voice=i18n.macos_voice(lang))
     await run_in_threadpool(tts.speak, request.text)
     return {"spoken": True}
 
