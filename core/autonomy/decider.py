@@ -31,37 +31,39 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
                               chat_fn=None, totp_code: str | None = None,
                               conservative: bool = False, brief: str = "") -> Decision:
     request = ActionRequest("jardo", "shell.run", command, objective or "")
-
-    # 1. Safety — refuse anything risky for unattended execution.
     findings = scan_dangerous_patterns(request) + scan_secrets(request)
-    blocking = [f for f in findings if f.severity in _BLOCK_AT_OR_ABOVE]
-    if blocking:
-        worst = max(blocking, key=lambda f: _BLOCK_AT_OR_ABOVE.index(f.severity))
-        # Truly forbidden actions (e.g. active scanning of third parties, illegal
-        # without authorization — SECURITY.md rule 2) are never permitted.
-        if any("forbidden" in f.message for f in blocking):
-            return Decision(False, f"forbidden and never permitted: {worst.message}",
-                            str(worst.severity))
-        # Otherwise the owner can authorize a risky action with a fresh TOTP code
-        # (spec §4.1 — TOTP is the gate for destructive/high-privilege actions).
+
+    # 1. Hard veto — ONLY catastrophic or illegal actions are never allowed, no
+    # matter what: recursive delete of root/home, raw disk writes, mkfs, fork bombs,
+    # active scanning tools. Everything a coding agent legitimately does — bash,
+    # curl, python -c, installs, builds, deleting a build/ dir, reading .env for
+    # config — is NOT auto-blocked here; blanket-blocking it would make Jardo
+    # useless as a supervisor. Those get judged in context by the model below.
+    forbidden = [f for f in findings if "forbidden" in f.message]
+    if forbidden:
+        return Decision(False, f"forbidden and never permitted: {forbidden[0].message}",
+                        str(forbidden[0].severity))
+    catastrophic = [f for f in findings if f.severity == Severity.CRITICAL]
+    if catastrophic:
         from core import totp
+        worst = catastrophic[0]
         if totp_code and totp.verify(totp_code):
             return Decision(True, f"owner-authorized via TOTP despite risk "
                             f"({worst.message})", str(worst.severity))
-        suffix = (" — a TOTP code from you would authorize it"
-                  if totp.is_enrolled() else "")
-        return Decision(False, f"unsafe to run unattended: {worst.message}{suffix}",
-                        str(worst.severity))
+        return Decision(False, f"refused — {worst.message} is destructive and "
+                        "irreversible", str(worst.severity))
 
-    # The command cleared the hard safety scan (no MEDIUM+ danger). Now judge it
-    # with understanding, not a keyword list. A capable model reads the project
-    # brief + progress and decides, as an expert supervisor, whether this action
-    # is safe and moves toward the goal — approving normal engineering work and
-    # declining only genuine missteps, with concrete guidance to redirect.
+    # 2. Lesser concerns (sudo, recursive delete of a dir, inline code, git force,
+    # reading credentials, pipe-to-shell) are normal in real dev work, so we don't
+    # auto-decline them — we hand them to the model as context and let it judge
+    # whether THIS one is safe and on-task for the project.
+    concerns = sorted({f.message for f in findings
+                       if f.severity in (Severity.MEDIUM, Severity.HIGH)})
+
     if chat_fn is not None:
         from core.supervision import judge_action
         j = await judge_action(objective, brief, f"run in terminal: {command}",
-                               chat_fn=chat_fn)
+                               chat_fn=chat_fn, concerns=concerns)
         if j.judged_by == "model":
             if j.approve:
                 return Decision(True, j.reason or "safe and on-task", "low")
@@ -69,10 +71,12 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
                             "low", guidance=j.guidance)
         # else: model unavailable/failed → fall through to the conservative floor.
 
-    # Conservative floor when NO model is available to reason (audit #1): a
-    # denylist can't catch every destructive command, so without a model to judge
-    # we only auto-approve what we positively recognize as safe; anything else is
-    # declined so the owner can run it themselves.
+    # 3. No model available to reason. Be conservative: a flagged concern or an
+    # unrecognized command is declined (the owner can run it); plain safe commands
+    # still pass so routine work isn't blocked when offline.
+    if concerns:
+        return Decision(False, f"can't judge this safely without a model available "
+                        f"({concerns[0]})", "low")
     if conservative:
         from core import appsettings
         from core.sentinel.checks import is_recognizably_safe

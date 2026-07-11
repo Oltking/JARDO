@@ -134,14 +134,19 @@ literally echo the goal: installing dependencies, creating/editing project files
 running tests or builds, starting dev servers, git add/commit, scaffolding,
 refactoring, reading files, searching the codebase.
 
-DECLINE only when the action is genuinely unsafe (destructive, deletes work,
-touches secrets/credentials, acts outside this project, force-pushes over shared
-history) OR is a clear wrong turn that does not serve the goal. When you decline,
-give precise, expert guidance for what the agent should do instead to stay safe
-and reach the goal, grounded in where the project currently is.
+Commands that look risky in isolation are usually normal here — APPROVE them when
+they serve the goal: installing packages, curl/wget to fetch resources, python -c
+or node -e one-liners, running build tools, deleting a build/ or node_modules dir,
+reading a .env for configuration.
+
+DECLINE only when the action is genuinely destructive or malicious: wiping real
+work or user data, deleting the home or system directory, exfiltrating secrets to a
+remote host, force-pushing over shared history — or when it's clearly a wrong turn
+for the goal. When you decline, give precise, expert guidance for what to do
+instead, grounded in where the project currently is.
 
 {brief}
-
+{concerns}
 AGENT'S PROPOSED ACTION:
 {action}
 
@@ -193,17 +198,25 @@ async def steering_nudge(objective: str, brief: str, obs: dict,
 
 
 async def judge_action(objective: str, brief: str, action: str,
-                       chat_fn=None) -> ActionJudgment:
+                       chat_fn=None, concerns: list[str] | None = None) -> ActionJudgment:
     """Expert, context-aware judgment of a single proposed action. Uses the model
     with the full project brief so the decision reflects understanding, not keyword
-    overlap. Falls back to the lexical heuristic only when no model is available."""
+    overlap. `concerns` are safety-scan flags (sudo, recursive delete, …) the model
+    should WEIGH in context rather than reject outright. Falls back to the lexical
+    heuristic only when no model is available."""
+    concern_line = (
+        "\nAutomated safety scan flagged (weigh in context, do not reject outright): "
+        + "; ".join(concerns) + "\n"
+        if concerns else ""
+    )
     if chat_fn is not None:
         try:
             import json
 
             from core.sentinel.checks import redact
             raw = await chat_fn(_JUDGE_PROMPT.format(
-                brief=redact(brief)[:4000], action=redact(action)[:800]))
+                brief=redact(brief)[:4000], action=redact(action)[:800],
+                concerns=concern_line))
             match = re.search(r"\{.*\}", raw, re.S)
             if match:
                 obj = json.loads(match.group(0))

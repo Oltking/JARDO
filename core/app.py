@@ -1307,28 +1307,19 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
         decision = Decision(False, "couldn't read the command clearly — declined "
                             "to be safe", "low")
     else:
-        # Safety veto over the WHOLE prompt block, not just the one extracted line:
-        # a coding agent shows the command a couple lines ABOVE "Do you want to
-        # proceed?", so scanning only prompt.action can miss rm -rf / sudo / pipe-to-
-        # shell entirely. Scan the block so a dangerous command anywhere is refused.
-        from core.sentinel.checks import scan_dangerous_patterns
-        from core.sentinel.models import ActionRequest, Severity
+        # Pass the whole prompt block (not just the one extracted line) to the
+        # decider: a coding agent shows the command a couple lines ABOVE "Do you
+        # want to proceed?", so the block ensures the catastrophic-command scan and
+        # the model both see the actual command. The decider hard-vetoes only truly
+        # destructive/illegal actions and lets the model judge everything else in
+        # context — so normal bash/curl/python/install work is approved.
+        chat_fn = _align if (providers.configured()
+                             or await app.state.ollama.is_up()) else None
+        brief = await _project_brief(session, active)
         _block = "\n".join(screen.splitlines()[-20:])
-        _blk = [Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
-        _hits = [f for f in scan_dangerous_patterns(
-            ActionRequest("jardo", "shell.run", _block, active.objective or ""))
-            if f.severity in _blk]
-        if _hits:
-            worst = max(_hits, key=lambda f: _blk.index(f.severity))
-            decision = Decision(False, f"unsafe to run unattended: {worst.message}",
-                                str(worst.severity))
-        else:
-            chat_fn = _align if (providers.configured()
-                                 or await app.state.ollama.is_up()) else None
-            brief = await _project_brief(session, active)
-            decision = await autonomous_decision(
-                session, prompt.action or _block, active.objective,
-                chat_fn=chat_fn, conservative=True, brief=brief)
+        decision = await autonomous_decision(
+            session, _block, active.objective,
+            chat_fn=chat_fn, conservative=True, brief=brief)
     pressed = False
     needs_accessibility = False
     try:
