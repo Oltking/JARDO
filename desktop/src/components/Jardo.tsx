@@ -76,8 +76,8 @@ function suggestName(goal: string): string {
     .split(/\s+/)
     .filter((w) => w && !skip.has(w))
     .slice(0, 4);
-  const name = words.join(" ").trim();
-  return name ? name.replace(/\b\w/g, (c) => c.toUpperCase()) : "New Project";
+  // Folder-safe: words joined by underscores, never spaces (e.g. "new_project").
+  return words.join("_") || "new_project";
 }
 
 // Speech-to-text routinely mangles "Claude" → "cloud/clod/claud" and "supervise"
@@ -943,8 +943,10 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
                 type="text"
                 value={intake.name}
                 autoFocus
-                placeholder="my-project"
-                onChange={(e) => setIntake({ ...intake, name: e.target.value })}
+                placeholder="my_project"
+                onChange={(e) =>
+                  setIntake({ ...intake, name: e.target.value.replace(/\s+/g, "_") })
+                }
               />
             </label>
 

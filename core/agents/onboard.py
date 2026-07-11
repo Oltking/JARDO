@@ -41,7 +41,11 @@ class NewProject:
 
 
 def slugify(text: str) -> str:
-    s = re.sub(r"[^a-z0-9._-]+", "-", text.strip().lower()).strip("-._")
+    # Spaces become underscores (so "new project" → "new_project"); any other
+    # illegal path characters collapse to a hyphen.
+    s = text.strip().lower()
+    s = re.sub(r"\s+", "_", s)
+    s = re.sub(r"[^a-z0-9._-]+", "-", s).strip("-._")
     return s[:60] or "project"
 
 
