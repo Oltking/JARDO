@@ -1333,7 +1333,7 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     # instruction telling the agent to adapt and keep working — the difference
     # between supervising and blocking (owner's insight).
     guided = False
-    if pressed and not decision.approve and prompt.kind == "command":
+    if pressed and not decision.approve and prompt.kind in ("command", "file"):
         import asyncio
 
         from core.supervision import decline_guidance
