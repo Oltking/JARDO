@@ -80,6 +80,10 @@ _FILE_OP = re.compile(
 def _prompt_kind(question: str) -> str:
     if _TRUST.search(question):
         return "trust"
+    # A prompt that's about RUNNING something is always vetted as a command, even
+    # if it also mentions a file — only pure edit/create/write prompts are "file".
+    if re.search(r"\brun\b|\bexecute\b|\bcommand\b|\bbash\b|\bshell\b", question, re.I):
+        return "command"
     if _FILE_OP.search(question):
         return "file"
     return "command"

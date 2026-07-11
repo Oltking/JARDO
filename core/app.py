@@ -1290,7 +1290,12 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     # judge the TARGET from the question, never the diff content, so normal code
     # containing "token"/"key"/".env" isn't mistaken for a dangerous command.
     elif prompt.kind == "file":
-        if _SENSITIVE_TARGET.search(prompt.question):
+        # Scan the whole prompt block (Claude names the file in a header above the
+        # diff, not always in the question) for a sensitive target. Erring toward
+        # caution here is fine — a file that writes ssh/etc paths is worth a human
+        # glance — while normal project writes sail through.
+        block = "\n".join(screen.splitlines()[-20:])
+        if _SENSITIVE_TARGET.search(block):
             decision = Decision(
                 False, "that writes to a sensitive location outside the project",
                 "low", guidance="Keep changes inside the project files instead.")
