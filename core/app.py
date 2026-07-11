@@ -1160,6 +1160,13 @@ _AGENT_MARKERS = (
     "tokens", "context left", "do you want", "proceed?",
 )
 _SHELL_PROMPT = re.compile(r"[\$%#❯➜]\s*$")
+# File-write targets we refuse even though writing is normally safe — outside the
+# project or into credentials/shell-init/system paths.
+_SENSITIVE_TARGET = re.compile(
+    r"\.ssh/|/etc/|authorized_keys|id_[rd]sa|\.aws/|/System/|/Library/LaunchDaemons|"
+    r"\.bash_profile|\.bashrc|\.zshrc|\.zprofile|sudoers|/private/etc",
+    re.IGNORECASE,
+)
 
 
 async def _project_brief(session, active) -> str:
@@ -1277,6 +1284,18 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
     # intent, so approve it — it isn't a shell command to vet.
     if prompt.kind == "trust":
         decision = Decision(True, "trusting your project folder", "low")
+    # File edit / create / write: the agent's core job, and low-risk because
+    # nothing is executed. Approve by default (writing to project files is the whole
+    # point) — but refuse writes aimed at clearly sensitive locations. Crucially we
+    # judge the TARGET from the question, never the diff content, so normal code
+    # containing "token"/"key"/".env" isn't mistaken for a dangerous command.
+    elif prompt.kind == "file":
+        if _SENSITIVE_TARGET.search(prompt.question):
+            decision = Decision(
+                False, "that writes to a sensitive location outside the project",
+                "low", guidance="Keep changes inside the project files instead.")
+        else:
+            decision = Decision(True, "writing project files — the agent's job", "low")
     # Fail safe (audit #4): if we couldn't confidently isolate the command being
     # asked about, decline rather than approve on a misread.
     elif not prompt.action.strip():

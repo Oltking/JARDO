@@ -90,42 +90,22 @@ class TerminalApp(TerminalDriver):
         except RuntimeError:
             return True  # couldn't tell (transient) — don't kill supervision on a blip
 
-    def _press_return(self) -> None:
-        # A real Enter key event. `do script` only writes a line feed to the tty,
-        # which shells accept as "run" but full-screen TUIs (Claude Code, Gemini)
-        # treat as a newline INSIDE the input box — they only submit on a genuine
-        # Return keypress. Best-effort: if Accessibility isn't granted this is a
-        # no-op (the typed text still sits there for the owner to send).
-        try:
-            _osa('tell application "Terminal" to activate',
-                 'tell application "System Events" to key code 36')
-        except RuntimeError as exc:
-            import logging
-            logging.getLogger("jardo.terminal").info(
-                "couldn't press Return (Accessibility?): %s", exc)
-
-    def send_keys(self, text: str, submit: bool, window_id=None) -> None:
-        # Preferred: Terminal's own Apple Events (Automation) — types into the
-        # session's stdin, no Accessibility, no focus theft. For a bare numbered
-        # keypress the digit is enough; for submitted text we must follow with a
-        # real Return so TUIs (which ignore a piped newline) actually send it.
-        try:
-            _osa(f'tell application "Terminal" to do script "{_esc(text)}" '
-                 f'in {self._target(window_id)}')
-            if submit:
-                self._press_return()
-            return
-        except RuntimeError as exc:
-            # Fall back to synthetic keystrokes (needs Accessibility). Log why the
-            # Automation path failed so a denied/erroring do-script is diagnosable
-            # rather than silently degrading.
-            import logging
-            logging.getLogger("jardo.terminal").info(
-                "do-script press failed, trying keystrokes: %s", exc)
-        lines = ['tell application "Terminal" to activate',
-                 f'tell application "System Events" to keystroke "{_esc(text)}"']
+    def _keystroke(self, text: str, submit: bool, window_id=None) -> None:
+        # Real key events via System Events (needs Accessibility). Used for anything
+        # that must be SUBMITTED, because a coding-agent TUI (Claude Code / Gemini)
+        # treats do-script's tty newline as a newline INSIDE its input box rather
+        # than a send — only a genuine Return keypress submits. We bring the pinned
+        # window to the front first so keystrokes land in the supervised session.
+        front = ['tell application "Terminal" to activate']
+        if window_id is not None:
+            # Best-effort focus of the exact window (ignored if it can't).
+            front.append(
+                f'try\ntell application "Terminal" to set frontmost of window '
+                f'id {window_id} to true\nend try')
+        lines = front + [
+            f'tell application "System Events" to keystroke "{_esc(text)}"']
         if submit:
-            lines.append('tell application "System Events" to key code 36')
+            lines.append('tell application "System Events" to key code 36')  # Return
         try:
             _osa(*lines)
         except RuntimeError as exc:
@@ -134,6 +114,24 @@ class TerminalApp(TerminalDriver):
                     "Grant Jardo Accessibility (System Settings → Privacy & "
                     "Security → Accessibility) so it can answer.") from exc
             raise
+
+    def send_keys(self, text: str, submit: bool, window_id=None) -> None:
+        # Submitted text/answer → real keystrokes + a real Return (the reliable path
+        # for TUIs, which ignore a piped newline). A bare numbered-menu keypress
+        # (submit=False) can go through Terminal's own Apple Events (do-script) —
+        # no Accessibility, no focus theft — since the digit acts immediately.
+        if submit:
+            self._keystroke(text, submit=True, window_id=window_id)
+            return
+        try:
+            _osa(f'tell application "Terminal" to do script "{_esc(text)}" '
+                 f'in {self._target(window_id)}')
+            return
+        except RuntimeError as exc:
+            import logging
+            logging.getLogger("jardo.terminal").info(
+                "do-script keypress failed, trying keystroke: %s", exc)
+        self._keystroke(text, submit=False, window_id=window_id)
 
     def open(self, shell_command: str):
         import os

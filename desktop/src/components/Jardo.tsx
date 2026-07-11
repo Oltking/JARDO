@@ -215,6 +215,8 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const speakingRef = useRef(false);
   const suppressUntilRef = useRef(0);
+  const speakSeqRef = useRef(0); // bumps each time Jardo speaks — used to drop any
+  // mic capture that overlapped speech (so Jardo never answers its own voice)
   // True while an utterance (typed or spoken) is being handled. The always-on mic
   // loop checks this before dispatching, so typing in the chat doesn't get a
   // second answer from a voice capture that overlapped it (no two responders).
@@ -242,6 +244,7 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
   // Pass alreadyLocalized=true when the caller has translated the text itself.
   async function speak(text: string, alreadyLocalized = false) {
     speakingRef.current = true;
+    speakSeqRef.current += 1; // mark that Jardo spoke (invalidates overlapping captures)
     try {
       const out =
         !alreadyLocalized && langRef.current !== "en"
@@ -546,9 +549,19 @@ export function Jardo({ autoStart = false }: { autoStart?: boolean }) {
     let silentStreak = 0; // consecutive cycles where the mic captured nothing
     try {
       while (runningRef.current) {
+        // Auto-mute: don't even record while Jardo is speaking (or in the brief
+        // tail after) — the cleanest way to stop it hearing its own voice.
+        if (speakingRef.current || Date.now() < suppressUntilRef.current) {
+          await new Promise((r) => setTimeout(r, 150));
+          continue;
+        }
         setPhase("listening");
+        const seqBefore = speakSeqRef.current; // detect speech during this capture
         const heard = await voiceTranscribe(6);
         if (!runningRef.current) break;
+        // Jardo spoke while we were recording → the capture is contaminated (its own
+        // voice). Drop it rather than answering itself.
+        if (speakSeqRef.current !== seqBefore) continue;
 
         // The speech model is still downloading (first run). The banner already
         // explains it; slow the loop so we don't spin, and keep waiting.

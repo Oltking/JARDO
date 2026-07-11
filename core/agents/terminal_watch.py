@@ -65,6 +65,24 @@ _TRUST = re.compile(
 # A numbered option line: "❯ 1. Yes", "  2. Yes, and don't ask again", "3. No…".
 _OPTION = re.compile(r"^\s*[❯>*]?\s*(\d+)[.)]\s+(.*\S)\s*$", re.MULTILINE)
 _YN = re.compile(r"\(\s*y\s*/\s*n\s*\)\s*[:?]?\s*$", re.IGNORECASE)
+# A file edit/create/write prompt (the agent writing to a project file) — the
+# agent's core job, and low-risk because nothing is executed. We must NOT run the
+# shell-danger/secret scan on the DIFF being written, or normal code containing
+# words like "token", "key", ".env", or "secret" gets flagged and declined.
+_FILE_OP = re.compile(
+    r"(make this edit|apply (?:this )?(?:edit|change|diff)|"
+    r"create (?:a )?(?:new )?file|write (?:to )?(?:the )?file|"
+    r"edit (?:the )?file|save (?:the )?file|(?:create|write|edit|update) [^\n?]*\.[a-z0-9]{1,5}\b)",
+    re.IGNORECASE,
+)
+
+
+def _prompt_kind(question: str) -> str:
+    if _TRUST.search(question):
+        return "trust"
+    if _FILE_OP.search(question):
+        return "file"
+    return "command"
 
 
 def detect_permission_prompt(text: str) -> PermissionPrompt | None:
@@ -105,13 +123,13 @@ def detect_permission_prompt(text: str) -> PermissionPrompt | None:
             if approve is None or deny is None:
                 return None
             action = _preceding_action(tail, q.start())
-            kind = "trust" if _TRUST.search(q.group(0)) else "command"
+            kind = _prompt_kind(q.group(0))
             return PermissionPrompt(action, q.group(0).strip(), approve_key=approve,
                                     deny_key=deny, numbered=True, kind=kind)
         # A question plus an explicit (y/n) marker is the only other real prompt.
         if _YN.search(tail):
             action = _preceding_action(tail, q.start())
-            kind = "trust" if _TRUST.search(q.group(0)) else "command"
+            kind = _prompt_kind(q.group(0))
             return PermissionPrompt(action, q.group(0).strip(), approve_key="y",
                                     deny_key="n", numbered=False, kind=kind)
         # A question with neither numbered options nor (y/n) is just prose —
