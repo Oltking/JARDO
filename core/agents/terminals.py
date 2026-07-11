@@ -116,22 +116,13 @@ class TerminalApp(TerminalDriver):
             raise
 
     def send_keys(self, text: str, submit: bool, window_id=None) -> None:
-        # Submitted text/answer → real keystrokes + a real Return (the reliable path
-        # for TUIs, which ignore a piped newline). A bare numbered-menu keypress
-        # (submit=False) can go through Terminal's own Apple Events (do-script) —
-        # no Accessibility, no focus theft — since the digit acts immediately.
-        if submit:
-            self._keystroke(text, submit=True, window_id=window_id)
-            return
-        try:
-            _osa(f'tell application "Terminal" to do script "{_esc(text)}" '
-                 f'in {self._target(window_id)}')
-            return
-        except RuntimeError as exc:
-            import logging
-            logging.getLogger("jardo.terminal").info(
-                "do-script keypress failed, trying keystroke: %s", exc)
-        self._keystroke(text, submit=False, window_id=window_id)
+        # ALWAYS real keystrokes. Claude Code / Gemini are Ink TUIs that read genuine
+        # key EVENTS — Terminal's `do script` pastes text into the tty, which the TUI
+        # does not reliably register as a menu keypress (nor as a submit). So a
+        # numbered answer is a real digit keypress (submit=False → no Return) and any
+        # typed answer/guidance is keystrokes + a real Return. This needs
+        # Accessibility; _keystroke raises AccessibilityDenied so the app can prompt.
+        self._keystroke(text, submit=submit, window_id=window_id)
 
     def open(self, shell_command: str):
         import os

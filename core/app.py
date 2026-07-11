@@ -1353,6 +1353,8 @@ async def terminal_tick(session: AsyncSession = Depends(get_session)) -> dict:
         try:
             terminal_watch.type_text(guidance, window_id)
             guided = True
+        except terminal_watch.AccessibilityDenied:
+            needs_accessibility = True  # surface it so the app prompts to grant
         except Exception:  # noqa: BLE001 — couldn't type; the owner can step in
             pass
 
