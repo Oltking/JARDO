@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Jardo · the personal assistant that supervises your coding agents</title>
-  <meta name="description" content="Jardo is a voice-first personal AI that supervises your coding agents. It answers their permission prompts against your goal, keeps them on-task, and routes every request to the cheapest capable model. Safe, continuous, and a fraction of the token cost." />
+  <meta name="description" content="Jardo is a voice-first personal AI that supervises your coding agents — in your language. It answers their permission prompts against your goal, steers them when they drift, and runs on Gemma on AMD Instinct GPUs with Fireworks AI as fallback. Safe, continuous, and a fraction of the token cost." />
 
   <meta property="og:title" content="Jardo · your personal assistant for coding agents" />
   <meta property="og:description" content="It conducts Claude Code and Gemini CLI while you're away: safely, continuously, and at a fraction of the token cost." />
@@ -50,9 +50,9 @@
         </h1>
         <p class="hero__sub reveal">
           Jardo is a voice-first AI chief of staff that sits above Claude Code and Gemini CLI
-          and <strong>runs them for you</strong>. It answers every permission prompt against your goal,
-          keeps the work on-task and safe, and routes each request to the cheapest capable model
-          on AMD GPU compute, Fireworks AI, or fully local.
+          and <strong>runs them for you — in your language</strong>. It answers every permission prompt
+          against your goal, steers the agent back on course when it drifts, and runs on
+          <strong>Gemma on AMD Instinct GPUs</strong>, with Fireworks AI as the instant fallback.
         </p>
         <div class="hero__actions reveal">
           <a class="btn btn--solid magnetic" href="#download">
@@ -62,9 +62,9 @@
           <a class="btn btn--ghost" href="#supervise">See how it supervises</a>
         </div>
         <p class="hero__trial reveal">
-          <span class="dot"></span> $1 of AI free on us. No key, no signup. It just talks.
+          <span class="dot"></span> $1 of AI free on us. No key, no signup. Talk to it in your language — it talks back.
         </p>
-        <p class="hero__note reveal">Windows, coming soon. No account. No telemetry.</p>
+        <p class="hero__note reveal">English, French, Spanish, German, Portuguese, Italian, Arabic, Hindi, Chinese. Windows, coming soon. No account. No telemetry.</p>
       </div>
       <div class="hero__scroll" aria-hidden="true"><span></span></div>
     </section>
@@ -83,9 +83,10 @@
       <div class="pillar reveal">
         <span class="pillar__num">01</span>
         <h3>A supervisor</h3>
-        <p>It watches the agent work and presses the answer on each permission prompt: approving what's
-        safe and on-task, declining what isn't. Conservative by default, so unrecognized or destructive
-        commands are never auto-run.</p>
+        <p>It reads the project, then answers each permission prompt against your goal: approving the
+        normal build, install, and edit work an agent needs, declining only what's genuinely
+        destructive, and typing the agent back on course when it stalls or drifts. A conductor, not
+        just a gate.</p>
       </div>
       <div class="pillar reveal">
         <span class="pillar__num">02</span>
@@ -93,7 +94,8 @@
         <p>Ask <em>“where am I?”</em> and it tells you the goal, what's done, what's left, and what needs
         your attention, pulled from the agent's own session memory and git, not an expensive codebase re-scan.
         Jardo also learns <strong>how you work</strong>: preferences, goals, and style stay on your device,
-        per machine, so the assistant feels like yours everywhere you open it.</p>
+        per machine, so the assistant feels like yours everywhere you open it. And it listens and replies
+        in <strong>your own language</strong> — thinking in English under the hood for accuracy.</p>
       </div>
       <div class="pillar reveal">
         <span class="pillar__num">03</span>
@@ -243,13 +245,14 @@
     <section class="compute" id="compute">
       <header class="section-head reveal">
         <p class="eyebrow">How we use the stack</p>
-        <h2>AMD GPU compute · Fireworks AI · AMD Developer Cloud</h2>
+        <h2>Gemma on AMD Instinct · Fireworks AI · AMD Developer Cloud</h2>
       </header>
       <div class="compute__grid">
         <div class="ccard reveal">
           <h4>AMD Instinct GPUs</h4>
-          <p>Self-hosted inference on MI300X-class hardware with ROCm and vLLM. Flat droplet cost wins for
-          sustained supervision. The router prefers AMD when both keys are configured and the math says so.</p>
+          <p>Your assistant runs <strong>Gemma on AMD Instinct GPUs via ROCm</strong> — self-hosted and
+          free, so it doesn't touch your trial. Flat droplet cost wins for sustained supervision, and it's
+          tried first for every request: chat, supervision, and on-the-fly translation.</p>
         </div>
         <div class="ccard reveal">
           <h4>Fireworks AI</h4>
@@ -263,8 +266,8 @@
         </div>
         <div class="ccard reveal">
           <h4>Local-first layer</h4>
-          <p>Speech-to-text, TTS, wake handling, and memory recall run on your machine. Trivial tasks stay on
-          Ollama (free). Cloud is invoked only when the accuracy floor requires it.</p>
+          <p>Speech-to-text, text-to-speech, and memory recall run on your machine, in your language.
+          Trivial tasks stay on Ollama (free). Cloud is invoked only when the accuracy floor requires it.</p>
         </div>
       </div>
     </section>
