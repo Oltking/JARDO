@@ -62,39 +62,19 @@ async def autonomous_decision(session: AsyncSession, command: str, objective: st
 
     if chat_fn is not None:
         from core.supervision import judge_action
-        j = await judge_action(objective, brief, f"run in terminal: {command}",
+        j = await judge_action(objective, brief, command,
                                chat_fn=chat_fn, concerns=concerns)
         if j.judged_by == "model":
             if j.approve:
                 return Decision(True, j.reason or "safe and on-task", "low")
             return Decision(False, j.reason or "off-task or unsafe for the goal",
                             "low", guidance=j.guidance)
-        # else: model unavailable/failed → fall through to the conservative floor.
+        # else: model unavailable/failed → fall through below.
 
-    # 3. No model available to reason. Be conservative: a flagged concern or an
-    # unrecognized command is declined (the owner can run it); plain safe commands
-    # still pass so routine work isn't blocked when offline.
-    if concerns:
-        return Decision(False, f"can't judge this safely without a model available "
-                        f"({concerns[0]})", "low")
-    if conservative:
-        from core import appsettings
-        from core.sentinel.checks import is_recognizably_safe
-        learned = frozenset(appsettings.get("allowed_programs", []) or [])
-        if not is_recognizably_safe(command, learned):
-            return Decision(False, "no model available to judge this and it isn't a "
-                            "recognizably-safe command — declined while acting "
-                            "unattended; run it yourself, or add it with 'jardo allow'",
-                            "low")
-
-    # No model, but recognizably safe (or not conservative): fall back to lexical
-    # alignment against the objective.
-    if objective and objective.strip():
-        from core.supervision import judge_alignment
-        alignment = await judge_alignment(
-            objective, f"run in terminal: {command}", chat_fn=chat_fn)
-        if not alignment.aligned:
-            return Decision(False, f"off-task for '{objective[:60]}': {alignment.reason}",
-                            "low")
-
-    return Decision(True, "safe and on-task — acting on your behalf", "low")
+    # 3. No model could judge (offline, or the call failed). Do NOT dumbly decline
+    # the agent's normal work — the owner chose to supervise and is watching, and
+    # anything truly catastrophic or illegal was already blocked in step 1. Trust
+    # the agent to do its job; a flagged concern just gets noted in the reason.
+    note = f" (noted: {concerns[0]})" if concerns else ""
+    return Decision(True, f"proceeding; no model to second-guess it right now{note}",
+                    "low")
