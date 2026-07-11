@@ -21,7 +21,7 @@
         copyBtn.textContent = "Copied";
         setTimeout(() => (copyBtn.textContent = prev), 1600);
       } catch {
-        /* clipboard blocked — the command is still visible to select */
+        /* clipboard blocked; the command is still visible to select */
       }
     });
   }
