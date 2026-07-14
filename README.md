@@ -1,141 +1,111 @@
 <div align="center">
   <img src="desktop/public/jardo-logo.png" alt="Jardo" width="120" />
   <h1>Jardo</h1>
-  <p><strong>Your voice-first AI chief of staff — it conducts your coding agents while you're away.</strong></p>
+  <p><strong>Your personal supervisor for coding agents. It runs them for you, in your language.</strong></p>
 </div>
 
 ---
 
 ## What Jardo is
 
-Jardo is a lifelong personal AI that sits above your coding agents (Claude Code, Gemini CLI) and **runs them on your behalf**. You talk to it. It sets up the project, launches the agent in your real terminal, and — this is the point — **answers the agent's permission prompts for you** by checking each action against your goal and its safety, so you don't have to sit there clicking *"Yes"* all day.
+Jardo is a voice-first AI assistant that sits above your coding agents (Claude Code, Gemini CLI) and **supervises them toward your goals**. You talk to it, in your own language. It sets up the project, launches the agent in your real terminal, and then stands watch: it reads the terminal, answers the agent's permission prompts against your goal, and steers the agent back on course when it drifts, so you do not have to sit there clicking *"Yes"* all day.
 
-It's built to be three things at once:
+It is three things at once:
 
-- **A supervisor** — it watches the agent work and approves what's safe and on-task, declines what isn't.
-- **A memory** — ask *"where am I?"* and it tells you the goal, what's done, what's left, and what needs your attention.
-- **A cost engine** — it routes every request to the cheapest model that clears an accuracy bar, and caches aggressively, so you get premium results without premium bills.
+- **A supervisor and conductor.** It watches the agent work, approves the normal build/install/edit work, declines only what is genuinely destructive, and types precise guidance back into the terminal when the agent stalls or wanders off task.
+- **A memory.** Ask *"where am I?"* and it tells you the goal, what is done, what is left, and what needs your attention, pulled from the agent's own session memory and git, not an expensive codebase re-scan.
+- **A cost engine.** It routes every request to the cheapest capable model and caches aggressively, so you get premium results without premium bills.
 
-Voice is the default everywhere. Open the app and it's already listening.
+Voice is the default everywhere, in nine languages. Open the app and it is already listening.
 
 ## The problem it solves
 
-Coding agents are powerful but needy. They stop every few minutes to ask permission. They forget where they were between sessions. They burn tokens re-reading your whole codebase. And leaving one running unattended is nerve-wracking — you don't know what it'll try.
+Coding agents are powerful but needy. They stop every few minutes to ask permission. They drift off task once you step away. They forget where they were between sessions. And leaving one running unattended is nerve-wracking.
 
-Jardo is the layer that makes an agent something you can actually **delegate to**: it keeps it moving, keeps it on-task, keeps it safe, and keeps it cheap.
+Jardo is the layer that makes an agent something you can actually **delegate to**: it keeps it moving, keeps it on task, keeps it safe, and keeps it cheap.
 
-## What we're selling
+## What makes it different
 
-> **A personal assistant that conducts coding agents for you — safely, continuously, and at a fraction of the token cost.**
+1. **Judgment, not a denylist.** Jardo does not blindly click yes, and it does not dumbly decline either. It reads the terminal like a senior engineer glancing over a teammate's shoulder, understands the command and the agent's own reasoning, and judges each action against your goal. It approves the real work an agent needs (installs, builds, tests, scaffolding, file edits, in-project git). It declines only genuinely destructive or off-task actions. Truly catastrophic or illegal actions (wiping a disk, deleting your home directory, active scanning of third parties) are refused outright, no matter what.
+2. **It steers.** When the agent gets stuck, loops, or drifts, Jardo does not just wait. It composes a concrete, project-aware instruction and types it into the terminal to get the agent back on track. A conductor, not just a gate.
+3. **In your language.** Speak and hear Jardo in English, French, Spanish, German, Portuguese, Italian, Arabic, Hindi, or Chinese. Your words and its replies are localized, while the reasoning core stays in English for accuracy, and Gemma does the translation.
+4. **Cost as a first-class feature.** Inference runs on Gemma on AMD Instinct GPUs via ROCm, which is free and tried first for chat, supervision, and translation, with Fireworks AI as the instant fallback. Every request is routed to the cheapest capable model, and exact plus semantic caching means repeated work is never billed twice.
+5. **Security-first and private.** Secrets live only in the macOS Keychain. Speech-to-text, text-to-speech, and memory recall run on your machine. A global kill-switch halts everything by hotkey. The audit log is append-only and redacts secrets. You can delete your entire profile at any time.
 
-The differentiators, in order:
+## Install
 
-1. **Autonomous supervision, not just automation.** Jardo decides for you after checking *safety* and *purpose* (does this action serve the goal you stated?). When acting unattended it is **conservative by default**: it auto-approves only commands it positively recognizes as safe (reads, tests, builds, in-project git/installs) and **declines everything else** — an unrecognized or destructive command is never auto-run. It never blindly clicks yes.
-2. **Cost as a first-class feature.** A cost-accuracy router picks local → self-hosted AMD → Fireworks by live $/token math; exact + semantic response caching means repeated work is free; agent briefs push for small, committed steps to stay inside the session's token budget.
-3. **Security-first by design.** Secrets live in the OS Keychain, never in files. A local API token gates every request. A global kill-switch halts everything. Audit logs are append-only and redact secrets.
-4. **Private by default.** Speech-to-text, wake handling, and memory recall run **on your machine**. Nothing about your voice or your projects leaves the device unless a cloud model is actually needed.
-5. **It remembers.** Jardo reads the agent's *own* on-disk memory to resume work — no expensive codebase re-scan just to answer "what was I doing?"
+Jardo is a self-contained macOS app. No Docker, no database, no API key, nothing to configure.
 
-## What it does today
-
-- 🎙️ **Always-on voice.** Opens listening — no tap, no wake word. Talk to it like a person.
-- 🖥️ **Terminal supervision.** *"Supervise Claude in my terminal"* → it reads your terminal (without disturbing it) and presses the answer on each permission prompt, judged against your goal.
-- 🧭 **"Where am I?"** Resume any project instantly — goal, recent progress, what's uncommitted, what needs your attention — pulled from the agent's session memory + git, not the codebase.
-- 🚀 **New-project onboarding.** *"Build me a landing page with Claude"* → it scaffolds the folder, `git init`s, writes the agent's brief, opens a terminal, starts the agent, and supervises it — after a one-line confirmation.
-- 💸 **Cost-accuracy router + caching.** Cheapest capable model, every time; repeats served from cache for free.
-- 🔌 **Bring your own keys.** Paste a Fireworks or AMD key in Settings; Jardo uses whichever is set and prefers the cheaper one.
-- 🔒 **Security controls.** Keychain-backed secrets, TOTP for high-privilege actions, kill-switch hotkey, redacted append-only audit log.
-- 🧑 **Personal.** Set the name Jardo calls you and your projects folder; it remembers.
-
-## How to use it
-
-> **Status:** early, active development. macOS-first; Windows is on the roadmap. Requires Docker, Python 3.14, and (for the desktop app) Node/pnpm + Rust.
+**One command (recommended):**
 
 ```bash
-# 1. Infrastructure (Postgres + Redis)
-docker compose -f infra/docker-compose.yml up -d
-
-# 2. Python core
-uv sync                       # add --extra voice for speech, --extra denoise for noise suppression
-uv run jardo setup            # identity + optional cloud key → Keychain
-uv run jardo serve            # runs the local API on 127.0.0.1
-
-# 3. Desktop app (in another terminal)
-cd desktop
-pnpm install
-pnpm tauri dev
+curl -fsSL https://jardo.vercel.app/install.sh | bash
 ```
 
-### Installing the app build (heads-up: it's unsigned)
+This downloads with `curl` (which does not trigger macOS quarantine), installs Jardo to your Applications folder, and launches it. No Gatekeeper warning, no right-click dance.
 
-Jardo isn't code-signed with an Apple Developer certificate yet, so the **first
-time you open it, macOS will block it** with *"Jardo can't be opened because
-Apple cannot check it for malicious software."* That's expected — it's not a
-virus, just unsigned. To open it:
+**Or the .dmg:** download it from the [website](https://jardo.vercel.app) or the [GitHub releases](https://github.com/Oltking/JARDO/releases). The build is self-signed but not Apple-notarized, so if you download it in a browser and macOS says it is "damaged," that is just the browser quarantine flag. Right-click the app and choose **Open**, or clear it once:
 
-1. **Right-click** (or Control-click) the Jardo app → **Open** → **Open** again to confirm. *(Only needed once.)*
-2. If that doesn't offer an Open button: **System Settings → Privacy & Security**, scroll to *"Jardo was blocked…"* → **Open Anyway**.
-3. Power-user alternative: `xattr -dr com.apple.quarantine /Applications/Jardo.app`
+```bash
+xattr -dr com.apple.quarantine ~/Downloads/Jardo_*.dmg
+```
 
-You'll also be asked to grant **Automation** (to read your terminal) and, on
-first supervise, possibly **Accessibility** — both are needed for Jardo to
-answer the agent's prompts. Grant them in System Settings → Privacy & Security.
+## First run
 
-### First run — where to go
+1. **Onboarding.** Set your name, how Jardo should address you, and your **language**. It also tells you which macOS permissions to expect (Microphone right away, Accessibility and Terminal control the first time you supervise).
+2. **The first dollar is on us.** Every Mac gets a hosted AI trial with no key and no signup. Because it runs on Gemma on AMD first (free), most of what you do never spends the trial. Adding your own Fireworks or AMD Developer Cloud key in Settings is optional.
+3. **Grant Accessibility when prompted.** Jardo presses the agent's answers with real keystrokes, so it needs Accessibility and Terminal (Automation) access. The app prompts you; click Allow.
 
-1. On launch, Jardo greets you and asks for the day's goal.
-2. **Add your model key:** open the **⋯** menu → **Providers** → paste a Fireworks (or AMD) key. *This is what makes Jardo sharp — without it, it falls back to a tiny local model.*
-3. **Set your name & projects folder** in the same menu, so it knows what to call you and where your projects live.
-4. Then just talk to it (below).
+Then just **talk to it** (in your language):
 
-Then just **talk to it**:
-
-| Say… | Jardo… |
+| Say... | Jardo... |
 | --- | --- |
-| *"Where am I?"* | Resumes your last project — goal, progress, what's left. |
-| *"Supervise Claude in my terminal."* | Watches your terminal and answers the agent's prompts. |
-| *"Build me a todo app with Claude."* | Scaffolds it, launches the agent, supervises it. |
-| *"Who am I?" / "What can you do?"* | Answers instantly, itself — no model needed. |
+| *"Where am I?"* | Resumes your last project: goal, progress, what is left. |
+| *"Supervise Claude in my terminal."* | Watches your terminal, answers prompts, and steers the agent. |
+| *"Build me a todo app with Claude."* | Scaffolds it, launches the agent, and supervises it. |
+| *"Who am I?" / "What can you do?"* | Answers instantly, itself, no model needed. |
 | *"Stop."* | Stands down. |
 
-Prefer typing? There's a text box for every one of these.
+Prefer typing? There is a text box for every one of these, and it translates typed input the same way.
 
 ## Under the hood
 
 | Layer | Tech |
 | --- | --- |
-| Core API | Python 3.14 · FastAPI · SQLAlchemy async · Arq workers |
-| Data | Postgres + pgvector · Redis |
 | Desktop | Tauri v2 · Rust · React + TypeScript + Vite |
-| Voice | faster-whisper (STT) · Piper (TTS) · optional noisereduce · all on-device |
-| Inference | Ollama (local) · Fireworks · AMD (self-hosted vLLM) — routed by cost |
-| Security | macOS Keychain · TOTP (RFC 6238) · Sentinel danger scan · append-only audit |
+| Core API | Python · FastAPI · SQLAlchemy async |
+| Data | Embedded SQLite + in-process queue (packaged app); Postgres + pgvector + Redis (dev/server) |
+| Voice | faster-whisper STT (multilingual) · Piper and macOS TTS · always-on, on-device |
+| Inference | Gemma on AMD Instinct (ROCm) tried first and free · Fireworks AI fallback · Ollama local · routed by cost |
+| Security | macOS Keychain secrets · local token · TOTP · Sentinel danger scan · append-only redacted audit log |
 
-The design keeps the sensitive parts local: your mic, your memory, and the safety decisions never require the cloud.
+The packaged app ships everything inside it. The sensitive parts (your mic, your memory, the safety decisions) stay local.
 
 ## Cost optimization (the engine)
 
 Jardo treats your token bill as something to actively minimize without losing quality:
 
-- **Right-sized routing** — trivial work stays local (free); hard work goes to the cheapest cloud model that passes an accuracy floor.
-- **AMD vs Fireworks by live math** — self-hosted AMD (flat cost) wins for sustained work; Fireworks for bursts.
-- **Exact + semantic caching** — the same (or similar) request is never billed twice.
-- **Lean agent briefs** — agents are told to work in small committed steps and keep context tight, so sessions don't blow their token budget.
+- **Gemma on AMD, free.** Chat, supervision, and translation run on your AMD Instinct droplet first, so most usage costs nothing and never spends the trial.
+- **Right-sized routing.** Trivial work stays local; harder work goes to the cheapest cloud model that clears an accuracy floor; Fireworks is the metered fallback.
+- **Exact and semantic caching.** The same or a similar request is never billed twice.
 
-## Roadmap — what Jardo *will* be
+## Multilingual voice
 
-- **Active token-budget awareness** — watch the agent's context and have it compact/summarize *before* it hits the wall.
-- **Windows support** — the whole thing, cross-platform.
-- **Multi-agent conducting** — supervise several agents and terminals at once.
-- **Deeper project memory** — cross-session goals, standing preferences, and proactive "here's what needs your attention" briefings.
-- **Away-mode autonomy** — trustworthy unattended runs while you're out, reporting back what it did.
+Jardo speaks nine languages out of the box: English, French, Spanish, German, Portuguese, Italian, Arabic, Hindi, and Chinese. The design translates at the edges: your speech is transcribed and translated to English for the core, and Jardo's replies are translated back and spoken with your language's native voice. The AI core stays in English so intent parsing, supervision, and command judgment never misfire. Change your language any time in Settings.
 
-## Security & privacy
+## Roadmap
 
-Jardo is built security-first. Highlights: secrets only in the OS Keychain; a constant-time token gates the local API; passive checks only — never active scanning of third-party systems; a **kill-switch** (tray, `⌘⇧⎋` hotkey, or header) that immediately halts the always-on listening and terminal supervision; conservative-by-default auto-approval; audit logs that are append-only and secret-redacted.
+- **Active token-budget awareness.** Watch the agent's context and have it compact before it hits the wall.
+- **Windows support.** The whole thing, cross-platform.
+- **Multi-agent conducting.** Supervise several agents and terminals at once.
+- **Away-mode autonomy.** Trustworthy unattended runs with summaries, approvals, and verified handoff reports.
+
+## Security and privacy
+
+Jardo is built security-first. Secrets live only in the OS Keychain, never in files. A local token gates the core API. It never actively scans third-party systems. A **kill-switch** (tray, `⌘⇧⎋` hotkey, or the header) immediately halts the always-on listening and terminal supervision. Only truly catastrophic or illegal actions are ever hard-blocked; everything else is judged in context. Audit logs are append-only and secret-redacted, and you can wipe your entire profile from the app whenever you want.
 
 ---
 
 <div align="center">
-  <sub>Built to be the assistant you'd actually trust with your terminal.</sub>
+  <sub>Built to be the assistant you would actually trust with your terminal.</sub>
 </div>
